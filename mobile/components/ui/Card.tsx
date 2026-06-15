@@ -1,4 +1,4 @@
-import { View, Pressable, ViewProps, ViewStyle, StyleSheet, Platform } from 'react-native';
+import { View, Pressable, ViewProps, ViewStyle, StyleProp, StyleSheet, Platform } from 'react-native';
 import { useThemeColors } from '@/hooks/useThemeColors';
 import { theme } from '@/constants/theme';
 
@@ -17,7 +17,7 @@ export interface CardProps extends ViewProps {
   padding?: number;
 
   /** Optional style override for the outer container */
-  style?: ViewStyle;
+  style?: StyleProp<ViewStyle>;
 }
 
 /**

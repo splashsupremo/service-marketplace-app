@@ -1,24 +1,26 @@
-import { View, StyleSheet } from 'react-native';
+import { StyleSheet } from 'react-native';
+import { ThemedView } from '@/components/ui/ThemedView';
 import { ThemedText } from '@/components/ui/ThemedText';
-import { useThemeColors } from '@/hooks/useThemeColors';
+import { Button } from '@/components/ui/Button';
 import { theme } from '@/constants/theme';
 
 export default function Index() {
-  const colors = useThemeColors();
-
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <ThemedText variant="h1">Heading 1</ThemedText>
-      <ThemedText variant="h2">Heading 2</ThemedText>
-      <ThemedText variant="h3">Heading 3</ThemedText>
-      <ThemedText variant="bodyLarge">Body large text</ThemedText>
-      <ThemedText variant="body">Regular body text</ThemedText>
-      <ThemedText variant="caption" color="textMuted">
-        Caption / muted text
-      </ThemedText>
-      <ThemedText color="error">Error message example</ThemedText>
-      <ThemedText color="primary">Primary colored text</ThemedText>
-    </View>
+    <ThemedView style={styles.container}>
+      <ThemedText variant="h1">Component Test</ThemedText>
+
+      <ThemedView variant="surface" style={styles.surfaceBox}>
+        <ThemedText>This is a "surface" ThemedView</ThemedText>
+      </ThemedView>
+
+      <Button label="Primary Button" onPress={() => console.log('Primary pressed')} fullWidth />
+      <Button label="Secondary Button" variant="secondary" onPress={() => console.log('Secondary pressed')} fullWidth />
+      <Button label="Outline Button" variant="outline" onPress={() => console.log('Outline pressed')} fullWidth />
+
+      <Button label="Small" size="sm" onPress={() => {}} />
+      <Button label="Loading..." loading onPress={() => {}} />
+      <Button label="Disabled" disabled onPress={() => {}} />
+    </ThemedView>
   );
 }
 
@@ -27,6 +29,10 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     padding: theme.spacing.lg,
-    gap: theme.spacing.sm,
+    gap: theme.spacing.md,
+  },
+  surfaceBox: {
+    padding: theme.spacing.lg,
+    borderRadius: theme.radius.lg,
   },
 });

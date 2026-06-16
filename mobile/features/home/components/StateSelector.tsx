@@ -6,7 +6,6 @@ import {
   FlatList,
   StyleSheet,
   TextInput,
-  KeyboardAvoidingView,
   Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -16,10 +15,7 @@ import { theme } from '@/constants/theme';
 import { NIGERIAN_STATES } from '@/app/services/mockData/nigerianStates';
 
 export interface StateSelectorProps {
-  /** Currently selected state name (or "All States") */
   selectedState: string;
-
-  /** Called when the user picks a state from the list */
   onStateChange: (state: string) => void;
 }
 
@@ -29,33 +25,45 @@ export interface StateSelectorProps {
  * A compact pressable button that shows the active state filter.
  * Tapping it opens a modal with a searchable list of all Nigerian states.
  *
- * Usage:
- *   <StateSelector
- *     selectedState={selectedState}
- *     onStateChange={setSelectedState}
- *   />
+ * FIX (bug report): previously the modal would open and then immediately
+ * close. Root cause: the dark overlay <Pressable> and the sheet content
+ * were siblings rendered directly inside <Modal>, and on some devices the
+ * same touch event that opened the modal (the trigger button's onPress)
+ * was bubbling/registering a second time against the overlay, closing it
+ * instantly. Fix: the overlay no longer closes on a generic press; it now
+ * only closes via the explicit "X" close button or by selecting a state.
+ * We also removed the absolutely-positioned KeyboardAvoidingView wrapper
+ * (a common source of layout/touch glitches on Android) in favor of a
+ * simpler, explicitly-sized bottom sheet.
  */
 export function StateSelector({ selectedState, onStateChange }: StateSelectorProps) {
   const colors = useThemeColors();
   const [modalVisible, setModalVisible] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
 
-  // Filter states list by the search query typed inside the modal
   const filteredStates = NIGERIAN_STATES.filter((state) =>
     state.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  function handleSelectState(state: string) {
-    onStateChange(state);
+  function openModal() {
+    setModalVisible(true);
+  }
+
+  function closeModal() {
     setModalVisible(false);
     setSearchQuery('');
+  }
+
+  function handleSelectState(state: string) {
+    onStateChange(state);
+    closeModal();
   }
 
   return (
     <>
       {/* ── Trigger Button ── */}
       <Pressable
-        onPress={() => setModalVisible(true)}
+        onPress={openModal}
         accessibilityRole="button"
         accessibilityLabel={`Location filter: ${selectedState}. Tap to change.`}
         style={({ pressed }) => [
@@ -67,17 +75,8 @@ export function StateSelector({ selectedState, onStateChange }: StateSelectorPro
           },
         ]}
       >
-        <Ionicons
-          name="location-outline"
-          size={14}
-          color={colors.primary}
-          style={{ marginRight: 4 }}
-        />
-        <ThemedText
-          variant="captionSemibold"
-          style={{ color: colors.text, marginRight: 4 }}
-          numberOfLines={1}
-        >
+        <Ionicons name="location-outline" size={14} color={colors.primary} style={{ marginRight: 4 }} />
+        <ThemedText variant="captionSemibold" style={{ color: colors.text, marginRight: 4 }} numberOfLines={1}>
           {selectedState}
         </ThemedText>
         <Ionicons name="chevron-down-outline" size={14} color={colors.textMuted} />
@@ -88,25 +87,15 @@ export function StateSelector({ selectedState, onStateChange }: StateSelectorPro
         visible={modalVisible}
         transparent
         animationType="slide"
-        onRequestClose={() => {
-          setModalVisible(false);
-          setSearchQuery('');
-        }}
+        onRequestClose={closeModal}
+        statusBarTranslucent
       >
-        {/* Dark overlay — tapping it closes the modal */}
-        <Pressable
-          style={[styles.overlay, { backgroundColor: colors.overlay }]}
-          onPress={() => {
-            setModalVisible(false);
-            setSearchQuery('');
-          }}
-        />
+        <View style={styles.modalRoot}>
+          {/* Dark overlay — explicit, separate close button only, no overlay-tap-to-close
+              (overlay-tap-to-close was the likely source of the instant-close bug) */}
+          <View style={[styles.overlay, { backgroundColor: colors.overlay }]} />
 
-        {/* Bottom sheet */}
-        <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          style={styles.keyboardView}
-        >
+          {/* Bottom sheet */}
           <View
             style={[
               styles.sheet,
@@ -114,21 +103,14 @@ export function StateSelector({ selectedState, onStateChange }: StateSelectorPro
             ]}
           >
             {/* Sheet Header */}
-            <View style={styles.sheetHeader}>
+            <View style={[styles.sheetHeader, { borderBottomColor: colors.border }]}>
               <ThemedText variant="h3">Select State</ThemedText>
               <Pressable
-                onPress={() => {
-                  setModalVisible(false);
-                  setSearchQuery('');
-                }}
+                onPress={closeModal}
                 hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                 accessibilityLabel="Close state selector"
               >
-                <Ionicons
-                  name="close-outline"
-                  size={24}
-                  color={colors.textSecondary}
-                />
+                <Ionicons name="close-outline" size={24} color={colors.textSecondary} />
               </Pressable>
             </View>
 
@@ -136,18 +118,10 @@ export function StateSelector({ selectedState, onStateChange }: StateSelectorPro
             <View
               style={[
                 styles.modalSearch,
-                {
-                  backgroundColor: colors.surfaceAlt,
-                  borderColor: colors.border,
-                },
+                { backgroundColor: colors.surfaceAlt, borderColor: colors.border },
               ]}
             >
-              <Ionicons
-                name="search-outline"
-                size={16}
-                color={colors.textMuted}
-                style={{ marginRight: theme.spacing.sm }}
-              />
+              <Ionicons name="search-outline" size={16} color={colors.textMuted} style={{ marginRight: theme.spacing.sm }} />
               <TextInput
                 value={searchQuery}
                 onChangeText={setSearchQuery}
@@ -159,11 +133,7 @@ export function StateSelector({ selectedState, onStateChange }: StateSelectorPro
               />
               {searchQuery.length > 0 && (
                 <Pressable onPress={() => setSearchQuery('')}>
-                  <Ionicons
-                    name="close-circle"
-                    size={16}
-                    color={colors.textMuted}
-                  />
+                  <Ionicons name="close-circle" size={16} color={colors.textMuted} />
                 </Pressable>
               )}
             </View>
@@ -174,6 +144,7 @@ export function StateSelector({ selectedState, onStateChange }: StateSelectorPro
               keyExtractor={(item) => item}
               showsVerticalScrollIndicator={false}
               keyboardShouldPersistTaps="handled"
+              style={styles.list}
               renderItem={({ item }) => {
                 const isActive = item === selectedState;
                 return (
@@ -199,20 +170,12 @@ export function StateSelector({ selectedState, onStateChange }: StateSelectorPro
                     />
                     <ThemedText
                       variant="body"
-                      style={{
-                        color: isActive ? colors.primary : colors.text,
-                        fontWeight: isActive ? '600' : '400',
-                      }}
+                      style={{ color: isActive ? colors.primary : colors.text, fontWeight: isActive ? '600' : '400' }}
                     >
                       {item}
                     </ThemedText>
                     {isActive && (
-                      <Ionicons
-                        name="checkmark-outline"
-                        size={16}
-                        color={colors.primary}
-                        style={{ marginLeft: 'auto' }}
-                      />
+                      <Ionicons name="checkmark-outline" size={16} color={colors.primary} style={{ marginLeft: 'auto' }} />
                     )}
                   </Pressable>
                 );
@@ -224,7 +187,7 @@ export function StateSelector({ selectedState, onStateChange }: StateSelectorPro
               }
             />
           </View>
-        </KeyboardAvoidingView>
+        </View>
       </Modal>
     </>
   );
@@ -240,14 +203,16 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     maxWidth: 160,
   },
-  overlay: {
+  modalRoot: {
     flex: 1,
+    justifyContent: 'flex-end',
   },
-  keyboardView: {
+  overlay: {
     position: 'absolute',
-    bottom: 0,
+    top: 0,
     left: 0,
     right: 0,
+    bottom: 0,
   },
   sheet: {
     borderTopLeftRadius: theme.radius.xl,
@@ -255,8 +220,8 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderLeftWidth: 1,
     borderRightWidth: 1,
-    maxHeight: '75%',
-    paddingBottom: theme.spacing.xxxl,
+    height: '70%',
+    paddingBottom: theme.spacing.xl,
   },
   sheetHeader: {
     flexDirection: 'row',
@@ -279,6 +244,9 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 14,
     paddingVertical: Platform.OS === 'android' ? 0 : undefined,
+  },
+  list: {
+    flex: 1,
   },
   stateItem: {
     flexDirection: 'row',

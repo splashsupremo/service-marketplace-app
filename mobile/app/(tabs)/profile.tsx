@@ -2,7 +2,8 @@ import { StyleSheet } from 'react-native';
 import { ThemedView } from '@/components/ui/ThemedView';
 import { ThemedText } from '@/components/ui/ThemedText';
 import { theme } from '@/constants/theme';
-
+import { Button } from '@/components/ui/Button';
+import { router } from 'expo-router';
 /**
  * Profile Screen (placeholder)
  *
@@ -17,6 +18,9 @@ export default function ProfileScreen() {
       <ThemedText variant="h1">Profile</ThemedText>
       <ThemedText color="textSecondary">
         Sign up or log in to manage your profile.
+
+        // ...inside the component's return, add:
+<Button label="Go to Register (test)" onPress={() => router.push('/auth/register')} style={{ marginTop: 20 }} />
       </ThemedText>
     </ThemedView>
   );

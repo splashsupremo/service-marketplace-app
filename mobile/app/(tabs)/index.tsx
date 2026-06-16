@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react';
 import { ScrollView, View, StyleSheet, RefreshControl } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { router } from 'expo-router';
 import { ThemedView } from '@/components/ui/ThemedView';
 import { ThemedText } from '@/components/ui/ThemedText';
 import { SearchBar } from '@/components/ui/SearchBar';
@@ -23,20 +24,19 @@ const PROVIDER_CARD_STEP = 200 + theme.spacing.md;
 /**
  * HomeScreen
  *
- * FIX (bug report): search bar is now directly editable (typing filters
- * providers inline by business name or category), instead of navigating
- * away on tap. The dedicated advanced-filter Search screen (Phase 5) will
- * remain a separate, deeper experience reached via its own tab.
+ * Search bar is directly editable (typing filters providers inline by
+ * business name or category). Category chips navigate to the Listings
+ * screen (Phase 5) instead of filtering in place — so there is no
+ * `selectedCategory` state here anymore; filtering is just state + search
+ * text.
  *
- * FEATURE: Featured Providers now auto-slides when the user isn't
- * touching it, via AutoScrollCarousel. Recently Added / Popular remain
- * manual-scroll only — auto-sliding every section would feel chaotic.
+ * Featured Providers auto-slides when the user isn't touching it, via
+ * AutoScrollCarousel. Recently Added / Popular remain manual-scroll only.
  */
 export default function HomeScreen() {
   const colors = useThemeColors();
 
   const [selectedState, setSelectedState] = useState<string>('All States');
-  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [refreshing, setRefreshing] = useState(false);
 
@@ -44,14 +44,13 @@ export default function HomeScreen() {
     const query = searchQuery.trim().toLowerCase();
     return MOCK_PROVIDERS.filter((p) => {
       const stateMatch = selectedState === 'All States' || p.state === selectedState;
-      const categoryMatch = selectedCategory === null || p.category === selectedCategory;
       const searchMatch =
         query === '' ||
         p.businessName.toLowerCase().includes(query) ||
         p.category.toLowerCase().includes(query);
-      return stateMatch && categoryMatch && searchMatch;
+      return stateMatch && searchMatch;
     });
-  }, [selectedState, selectedCategory, searchQuery]);
+  }, [selectedState, searchQuery]);
 
   const featuredProviders = useMemo(
     () => filteredProviders.filter((p) => p.isFeatured),
@@ -132,10 +131,8 @@ export default function HomeScreen() {
                   key={cat.id}
                   label={cat.name}
                   icon={cat.icon}
-                  isSelected={selectedCategory === cat.name}
-                  onPress={() =>
-                    setSelectedCategory(selectedCategory === cat.name ? null : cat.name)
-                  }
+                  isSelected={false}
+                  onPress={() => router.push({ pathname: '/listings', params: { category: cat.name } })}
                 />
               ))}
             </ScrollView>
@@ -143,7 +140,10 @@ export default function HomeScreen() {
 
           {/* ── Featured Providers (auto-sliding) ── */}
           <View style={styles.section}>
-            <SectionHeader title="Featured Providers" onActionPress={() => console.log('See all featured')} />
+            <SectionHeader
+              title="Featured Providers"
+              onActionPress={() => router.push({ pathname: '/listings', params: { filter: 'featured' } })}
+            />
             {featuredProviders.length === 0 ? (
               renderEmptySection(emptyMessage)
             ) : (
@@ -165,7 +165,10 @@ export default function HomeScreen() {
 
           {/* ── Recently Added (manual scroll) ── */}
           <View style={styles.section}>
-            <SectionHeader title="Recently Added" onActionPress={() => console.log('See all recent')} />
+            <SectionHeader
+              title="Recently Added"
+              onActionPress={() => router.push({ pathname: '/listings', params: { filter: 'recent' } })}
+            />
             {recentProviders.length === 0 ? (
               renderEmptySection(emptyMessage)
             ) : (
@@ -187,7 +190,10 @@ export default function HomeScreen() {
 
           {/* ── Popular Providers (manual scroll) ── */}
           <View style={styles.section}>
-            <SectionHeader title="Popular Providers" onActionPress={() => console.log('See all popular')} />
+            <SectionHeader
+              title="Popular Providers"
+              onActionPress={() => router.push({ pathname: '/listings', params: { filter: 'popular' } })}
+            />
             {popularProviders.length === 0 ? (
               renderEmptySection(emptyMessage)
             ) : (

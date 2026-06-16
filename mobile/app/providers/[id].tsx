@@ -11,11 +11,9 @@ import { StickyActionBar } from '@/features/providers/components/StickyActionBar
 import { SectionHeader } from '@/components/ui/SectionHeader';
 import { MOCK_PROVIDERS } from '@/app/services/mockData/providers';
 import { MOCK_PROVIDER_DETAILS } from '@/services/mockData/providerDetails';
+import { useAuthStore } from '@/store/authStore';
 import { useThemeColors } from '@/hooks/useThemeColors';
 import { theme } from '@/constants/theme';
-
-// TODO: Phase 7 — replace with real auth state from the Zustand auth store.
-const isAuthenticated = false;
 
 /**
  * ProviderProfileScreen
@@ -24,12 +22,20 @@ const isAuthenticated = false;
  * /providers/[id]. Looks up the provider by id from mock data, combining
  * the lightweight Provider record with its richer ProviderDetail fields.
  *
+ * Auth state is now read from the real Zustand auth store (Phase 7) —
+ * isAuthenticated is true whenever a Supabase session/user exists.
+ *
+ * TODO: Phase 8 — wire up real favourite persistence (Supabase table)
+ * instead of local-only isFavourited state.
+ * TODO: Phase 10 — wire up real chat navigation instead of console.log.
  * TODO: Phase 12 — replace mock lookups with a Supabase query by id.
  */
 export default function ProviderProfileScreen() {
   const colors = useThemeColors();
   const { id } = useLocalSearchParams<{ id: string }>();
   const [isFavourited, setIsFavourited] = useState(false);
+
+  const isAuthenticated = useAuthStore((s) => !!s.user);
 
   const provider = useMemo(() => MOCK_PROVIDERS.find((p) => p.id === id), [id]);
   const detail = id ? MOCK_PROVIDER_DETAILS[id] : undefined;
@@ -68,7 +74,7 @@ export default function ProviderProfileScreen() {
       return;
     }
     // TODO: Phase 10 — navigate to chat screen with this provider
-    console.log('Navigate to chat with:', provider!.businessName);
+    console.log('Navigate to chat with:', provider?.businessName ?? 'provider');
   }
 
   return (

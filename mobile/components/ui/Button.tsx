@@ -1,4 +1,4 @@
-import { Pressable, ActivityIndicator, StyleSheet, ViewStyle } from 'react-native';
+import { Pressable, ActivityIndicator, StyleSheet, StyleProp, ViewStyle } from 'react-native';
 import { useThemeColors } from '@/hooks/useThemeColors';
 import { theme } from '@/constants/theme';
 import { ThemedText } from './ThemedText';
@@ -29,7 +29,7 @@ export interface ButtonProps {
   fullWidth?: boolean;
 
   /** Optional style override for the outer container */
-  style?: ViewStyle;
+  style?: StyleProp<ViewStyle>;
 }
 
 /**

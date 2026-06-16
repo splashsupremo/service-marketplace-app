@@ -184,7 +184,7 @@ export default function ListingsScreen() {
             <ProviderGridCard
               provider={item}
               width={cardWidth}
-              onPress={() => console.log('Navigate to provider:', item.businessName)}
+              onPress={() => router.push({ pathname: '/providers/[id]', params: { id: item.id } })}
               style={{ marginBottom: GRID_GAP }}
             />
           )}

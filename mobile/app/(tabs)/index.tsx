@@ -206,7 +206,7 @@ export default function HomeScreen() {
                   <ProviderCard
                     key={provider.id}
                     provider={provider}
-                    onPress={() => console.log('Navigate to provider:', provider.businessName)}
+                    onPress={() => router.push({ pathname: '/providers/[id]', params: { id: provider.id } })}
                   />
                 ))}
               </ScrollView>

@@ -4,6 +4,7 @@ import { Profile, UserRole } from '@/types/auth';
 import type { User } from '@supabase/supabase-js';
 import { useFavouritesStore } from '@/store/favouritesStore';
 import { useProviderStore } from '@/store/providerStore';
+import { useChatStore } from '@/store/chatStore';
 interface AuthState {
   user: User | null;
   profile: Profile | null;
@@ -160,6 +161,7 @@ signOut: async () => {
   set({ user: null, profile: null });
   useFavouritesStore.getState().clearFavourites();
   useProviderStore.getState().reset();
+  useChatStore.getState().reset();
 },
 
   /**

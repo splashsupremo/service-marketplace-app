@@ -97,7 +97,7 @@ export default function ProfileScreen() {
           </View>
         </View>
 <Button label="Provider Dashboard " onPress={() => router.push('/provider/dashboard')} style={{ marginTop: 12 }} />
-       
+       <Button label="Real Providers (dev test)" onPress={() => router.push('/dev/real-providers')} style={{ marginTop: 12 }} />
       </ThemedView>
     </SafeAreaView>
   );

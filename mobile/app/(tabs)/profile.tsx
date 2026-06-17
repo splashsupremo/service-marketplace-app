@@ -11,6 +11,7 @@ import { theme } from '@/constants/theme';
 import { ProfileMenuItem } from '@/features/profile/components/ProfileMenuItem';
 
 
+
 /**
  * ProfileScreen
  *
@@ -95,20 +96,8 @@ export default function ProfileScreen() {
             </ThemedText>
           </View>
         </View>
-<Button label="Provider Dashboard (test)" onPress={() => router.push('/provider/dashboard')} style={{ marginTop: 12 }} />
-        <View style={styles.menuSection}>
-  <ThemedText variant="label" color="textSecondary" style={styles.sectionLabel}>
-    ACCOUNT
-  </ThemedText>
-  <ProfileMenuItem
-    icon="create-outline"
-    label="Edit Profile"
-    onPress={() => router.push('/profile/edit' as any)}
-  />
-  {/* TODO: Phase 9 — if role is 'provider', add a "Provider Dashboard" ProfileMenuItem here */}
-
-  <Button label="Log Out" variant="secondary" onPress={handleSignOut} fullWidth style={{ marginTop: theme.spacing.xl }} />
-</View>
+<Button label="Provider Dashboard " onPress={() => router.push('/provider/dashboard')} style={{ marginTop: 12 }} />
+       
       </ThemedView>
     </SafeAreaView>
   );

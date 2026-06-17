@@ -52,58 +52,75 @@ export const useChatStore = create<ChatState>((set, get) => ({
   activeChannel: null,
 
   /**
-   * fetchConversations
-   *
-   * Loads all conversations the logged-in user is part of, joining in
-   * the provider's business_name/image and the customer's full_name so
-   * each row can display "the other person" correctly regardless of
-   * which side the logged-in user is on.
-   */
-  fetchConversations: async () => {
-    set({ isLoadingConversations: true });
+  /**
+ * fetchConversations
+ *
+ * Loads all conversations the logged-in user is part of, then
+ * separately fetches the related providers and profiles rows needed
+ * to display "the other person" — done as two follow-up queries
+ * rather than a single nested join, since there's no direct foreign
+ * key between `conversations` and `profiles` for PostgREST to
+ * traverse automatically (conversations.customer_id and profiles.id
+ * both reference auth.users.id independently, not each other).
+ */
+fetchConversations: async () => {
+  set({ isLoadingConversations: true });
 
-    const { data: sessionData } = await supabase.auth.getSession();
-    const userId = sessionData.session?.user.id;
-    if (!userId) {
-      set({ conversations: [], isLoadingConversations: false });
-      return;
-    }
+  const { data: sessionData } = await supabase.auth.getSession();
+  const userId = sessionData.session?.user.id;
+  if (!userId) {
+    set({ conversations: [], isLoadingConversations: false });
+    return;
+  }
 
-    const { data, error } = await supabase
-      .from('conversations')
-      .select(`
-        id,
-        customer_id,
-        provider_id,
-        last_message_at,
-        providers ( business_name, image_url, user_id ),
-        customer:profiles!conversations_customer_id_fkey ( full_name )
-      `)
-      .order('last_message_at', { ascending: false });
+  const { data: conversationsData, error } = await supabase
+    .from('conversations')
+    .select('id, customer_id, provider_id, last_message_at')
+    .order('last_message_at', { ascending: false });
 
-    if (error) {
-      console.error('Error fetching conversations:', error.message);
-      set({ isLoadingConversations: false });
-      return;
-    }
+  if (error) {
+    console.error('Error fetching conversations:', error.message);
+    set({ isLoadingConversations: false });
+    return;
+  }
 
-    const summaries: ConversationSummary[] = (data ?? []).map((row: any) => {
-      const isCustomerView = row.customer_id === userId;
-      return {
-        id: row.id,
-        customer_id: row.customer_id,
-        provider_id: row.provider_id,
-        last_message_at: row.last_message_at,
-        isCustomerView,
-        otherPersonName: isCustomerView
-          ? row.providers?.business_name ?? 'Provider'
-          : row.customer?.full_name ?? 'Customer',
-        otherPersonImage: isCustomerView ? row.providers?.image_url ?? null : null,
-      };
-    });
+  if (!conversationsData || conversationsData.length === 0) {
+    set({ conversations: [], isLoadingConversations: false });
+    return;
+  }
 
-    set({ conversations: summaries, isLoadingConversations: false });
-  },
+  // Gather the unique provider ids and customer ids we need extra info for
+  const providerIds = [...new Set(conversationsData.map((c) => c.provider_id))];
+  const customerIds = [...new Set(conversationsData.map((c) => c.customer_id))];
+
+  const [{ data: providersData }, { data: profilesData }] = await Promise.all([
+    supabase.from('providers').select('id, business_name, image_url, user_id').in('id', providerIds),
+    supabase.from('profiles').select('id, full_name').in('id', customerIds),
+  ]);
+
+  const providersById = new Map((providersData ?? []).map((p) => [p.id, p]));
+  const profilesById = new Map((profilesData ?? []).map((p) => [p.id, p]));
+
+  const summaries: ConversationSummary[] = conversationsData.map((row) => {
+    const isCustomerView = row.customer_id === userId;
+    const provider = providersById.get(row.provider_id);
+    const customerProfile = profilesById.get(row.customer_id);
+
+    return {
+      id: row.id,
+      customer_id: row.customer_id,
+      provider_id: row.provider_id,
+      last_message_at: row.last_message_at,
+      isCustomerView,
+      otherPersonName: isCustomerView
+        ? provider?.business_name ?? 'Provider'
+        : customerProfile?.full_name ?? 'Customer',
+      otherPersonImage: isCustomerView ? provider?.image_url ?? null : null,
+    };
+  });
+
+  set({ conversations: summaries, isLoadingConversations: false });
+},
 
   /**
    * startConversation

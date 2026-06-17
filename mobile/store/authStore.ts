@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { supabase } from '@/services/supabase/client';
 import { Profile, UserRole } from '@/types/auth';
 import type { User } from '@supabase/supabase-js';
-
+import { useFavouritesStore } from '@/store/favouritesStore';
 interface AuthState {
   user: User | null;
   profile: Profile | null;
@@ -154,7 +154,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
    * signOut
    */
   signOut: async () => {
-    await supabase.auth.signOut();
-    set({ user: null, profile: null });
-  },
+  await supabase.auth.signOut();
+  set({ user: null, profile: null });
+  useFavouritesStore.getState().clearFavourites();
+},
 }));

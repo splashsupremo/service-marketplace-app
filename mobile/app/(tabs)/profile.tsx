@@ -8,6 +8,8 @@ import { Button } from '@/components/ui/Button';
 import { useAuthStore } from '@/store/authStore';
 import { useThemeColors } from '@/hooks/useThemeColors';
 import { theme } from '@/constants/theme';
+import { ProfileMenuItem } from '@/features/profile/components/ProfileMenuItem';
+
 
 /**
  * ProfileScreen
@@ -95,9 +97,18 @@ export default function ProfileScreen() {
         </View>
 
         <View style={styles.menuSection}>
-          {/* TODO: Phase 9 — if role is 'provider', show a "Provider Dashboard" entry here */}
-          <Button label="Log Out" variant="secondary" onPress={handleSignOut} fullWidth />
-        </View>
+  <ThemedText variant="label" color="textSecondary" style={styles.sectionLabel}>
+    ACCOUNT
+  </ThemedText>
+  <ProfileMenuItem
+    icon="create-outline"
+    label="Edit Profile"
+    onPress={() => router.push('/profile/edit' as any)}
+  />
+  {/* TODO: Phase 9 — if role is 'provider', add a "Provider Dashboard" ProfileMenuItem here */}
+
+  <Button label="Log Out" variant="secondary" onPress={handleSignOut} fullWidth style={{ marginTop: theme.spacing.xl }} />
+</View>
       </ThemedView>
     </SafeAreaView>
   );
@@ -138,4 +149,5 @@ const styles = StyleSheet.create({
     marginTop: theme.spacing.md,
   },
   menuSection: { marginTop: 'auto', paddingBottom: theme.spacing.lg },
+  sectionLabel: { marginBottom: theme.spacing.sm },
 });

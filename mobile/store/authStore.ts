@@ -18,6 +18,7 @@ interface AuthState {
   ) => Promise<{ error: string | null }>;
   signIn: (email: string, password: string) => Promise<{ error: string | null }>;
   signOut: () => Promise<void>;
+  updateProfile: (fullName: string) => Promise<{ error: string | null }>;
 }
 
 /**
@@ -158,4 +159,33 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   set({ user: null, profile: null });
   useFavouritesStore.getState().clearFavourites();
 },
+
+  /**
+   * updateProfile
+   *
+   * Updates the current user's full_name in the profiles table, then
+   * syncs the local store so the change reflects immediately across
+   * the app without needing a full re-fetch.
+   */
+  updateProfile: async (fullName: string) => {
+    const currentUser = get().user;
+    if (!currentUser) {
+      return { error: 'You must be logged in to update your profile.' };
+    }
+
+    const { error } = await supabase
+      .from('profiles')
+      .update({ full_name: fullName })
+      .eq('id', currentUser.id);
+
+    if (error) {
+      return { error: error.message };
+    }
+
+    set((state) => ({
+      profile: state.profile ? { ...state.profile, full_name: fullName } : state.profile,
+    }));
+
+    return { error: null };
+  },
 }));

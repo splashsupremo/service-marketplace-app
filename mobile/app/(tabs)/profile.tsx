@@ -95,7 +95,7 @@ export default function ProfileScreen() {
             </ThemedText>
           </View>
         </View>
-
+<Button label="Provider Dashboard (test)" onPress={() => router.push('/provider/dashboard')} style={{ marginTop: 12 }} />
         <View style={styles.menuSection}>
   <ThemedText variant="label" color="textSecondary" style={styles.sectionLabel}>
     ACCOUNT

@@ -1,5 +1,5 @@
-import { useState, useMemo } from 'react';
-import { ScrollView, View, StyleSheet, RefreshControl } from 'react-native';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { ScrollView, View, StyleSheet, RefreshControl, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { ThemedView } from '@/components/ui/ThemedView';
@@ -12,67 +12,94 @@ import { CategoryChip } from '@/features/home/components/CategoryChip';
 import { ProviderCard } from '@/features/providers/components/ProviderCard';
 import { AutoScrollCarousel } from '@/features/providers/components/AutoScrollCarousel';
 import { CATEGORIES } from '@/app/services/mockData/categories';
-import { MOCK_PROVIDERS } from '@/app/services/mockData/providers';
+import { supabase } from '@/services/supabase/client';
+import { mapDbProviderToProvider, DbProvider } from '@/services/supabase/providerMappers';
 import { useThemeColors } from '@/hooks/useThemeColors';
 import { theme } from '@/constants/theme';
 import { Provider } from '@/types/provider';
 
-// Width of a single ProviderCard (200px) + its right margin (theme.spacing.md = 12px)
-// Used by AutoScrollCarousel to calculate scroll offsets accurately.
 const PROVIDER_CARD_STEP = 200 + theme.spacing.md;
+const SECTION_LIMIT = 6;
+const SEARCH_DEBOUNCE_MS = 400;
 
 /**
  * HomeScreen
  *
- * Search bar is directly editable (typing filters providers inline by
- * business name or category). Category chips navigate to the Listings
- * screen (Phase 5) instead of filtering in place — so there is no
- * `selectedCategory` state here anymore; filtering is just state + search
- * text.
- *
- * Featured Providers auto-slides when the user isn't touching it, via
- * AutoScrollCarousel. Recently Added / Popular remain manual-scroll only.
+ * Phase 12: Featured/Recently Added/Popular now come from three real
+ * Supabase queries instead of filtering MOCK_PROVIDERS in JS. Search
+ * text is debounced before triggering new queries, since typing now
+ * causes real network requests rather than instant in-memory filtering.
  */
 export default function HomeScreen() {
   const colors = useThemeColors();
 
   const [selectedState, setSelectedState] = useState<string>('All States');
   const [searchQuery, setSearchQuery] = useState('');
+  const [debouncedQuery, setDebouncedQuery] = useState('');
   const [refreshing, setRefreshing] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
 
-  const filteredProviders = useMemo<Provider[]>(() => {
-    const query = searchQuery.trim().toLowerCase();
-    return MOCK_PROVIDERS.filter((p) => {
-      const stateMatch = selectedState === 'All States' || p.state === selectedState;
-      const searchMatch =
-        query === '' ||
-        p.businessName.toLowerCase().includes(query) ||
-        p.category.toLowerCase().includes(query);
-      return stateMatch && searchMatch;
-    });
-  }, [selectedState, searchQuery]);
+  const [featuredProviders, setFeaturedProviders] = useState<Provider[]>([]);
+  const [recentProviders, setRecentProviders] = useState<Provider[]>([]);
+  const [popularProviders, setPopularProviders] = useState<Provider[]>([]);
 
-  const featuredProviders = useMemo(
-    () => filteredProviders.filter((p) => p.isFeatured),
-    [filteredProviders]
-  );
+  const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const recentProviders = useMemo(
-    () =>
-      [...filteredProviders]
-        .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-        .slice(0, 6),
-    [filteredProviders]
-  );
+  // Debounce search input before it affects queries
+  useEffect(() => {
+    if (debounceTimer.current) clearTimeout(debounceTimer.current);
+    debounceTimer.current = setTimeout(() => {
+      setDebouncedQuery(searchQuery.trim());
+    }, SEARCH_DEBOUNCE_MS);
+    return () => {
+      if (debounceTimer.current) clearTimeout(debounceTimer.current);
+    };
+  }, [searchQuery]);
 
-  const popularProviders = useMemo(
-    () => [...filteredProviders].sort((a, b) => b.rating - a.rating).slice(0, 6),
-    [filteredProviders]
-  );
+  function applyCommonFilters(query: any) {
+    if (selectedState !== 'All States') {
+      query = query.eq('state', selectedState);
+    }
+    if (debouncedQuery.length > 0) {
+      query = query.or(`business_name.ilike.%${debouncedQuery}%,category.ilike.%${debouncedQuery}%`);
+    }
+    return query;
+  }
 
-  function handleRefresh() {
+  const fetchSections = useCallback(async () => {
+    setIsLoading(true);
+
+    const [featuredRes, recentRes, popularRes] = await Promise.all([
+      applyCommonFilters(
+        supabase.from('providers').select('*').eq('is_featured', true)
+      ).limit(SECTION_LIMIT),
+      applyCommonFilters(
+        supabase.from('providers').select('*').order('created_at', { ascending: false })
+      ).limit(SECTION_LIMIT),
+      applyCommonFilters(
+        supabase.from('providers').select('*').order('rating', { ascending: false })
+      ).limit(SECTION_LIMIT),
+    ]);
+
+    if (featuredRes.error) console.error('Featured fetch error:', featuredRes.error.message);
+    if (recentRes.error) console.error('Recent fetch error:', recentRes.error.message);
+    if (popularRes.error) console.error('Popular fetch error:', popularRes.error.message);
+
+    setFeaturedProviders((featuredRes.data ?? []).map((r: DbProvider) => mapDbProviderToProvider(r)));
+    setRecentProviders((recentRes.data ?? []).map((r: DbProvider) => mapDbProviderToProvider(r)));
+    setPopularProviders((popularRes.data ?? []).map((r: DbProvider) => mapDbProviderToProvider(r)));
+
+    setIsLoading(false);
+  }, [selectedState, debouncedQuery]);
+
+  useEffect(() => {
+    fetchSections();
+  }, [fetchSections]);
+
+  async function handleRefresh() {
     setRefreshing(true);
-    setTimeout(() => setRefreshing(false), 1000);
+    await fetchSections();
+    setRefreshing(false);
   }
 
   function renderEmptySection(message: string) {
@@ -86,7 +113,7 @@ export default function HomeScreen() {
   }
 
   const emptyMessage =
-    selectedState === 'All States' ? 'No providers found' : `No providers found in ${selectedState}`;
+    selectedState === 'All States' ? 'No providers found yet' : `No providers found in ${selectedState}`;
 
   return (
     <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.background }]} edges={['top']}>
@@ -98,15 +125,9 @@ export default function HomeScreen() {
           contentContainerStyle={styles.scrollContent}
           keyboardShouldPersistTaps="handled"
           refreshControl={
-            <RefreshControl
-              refreshing={refreshing}
-              onRefresh={handleRefresh}
-              tintColor={colors.primary}
-              colors={[colors.primary]}
-            />
+            <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colors.primary} colors={[colors.primary]} />
           }
         >
-          {/* ── Search + State Row ── */}
           <View style={styles.searchRow}>
             <SearchBar
               value={searchQuery}
@@ -118,14 +139,9 @@ export default function HomeScreen() {
             <StateSelector selectedState={selectedState} onStateChange={setSelectedState} />
           </View>
 
-          {/* ── Categories ── */}
           <View style={styles.section}>
             <SectionHeader title="Categories" actionLabel={null} />
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.horizontalList}
-            >
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.horizontalList}>
               {CATEGORIES.map((cat) => (
                 <CategoryChip
                   key={cat.id}
@@ -138,80 +154,73 @@ export default function HomeScreen() {
             </ScrollView>
           </View>
 
-          {/* ── Featured Providers (auto-sliding) ── */}
-          <View style={styles.section}>
-            <SectionHeader
-              title="Featured Providers"
-              onActionPress={() => router.push({ pathname: '/listings', params: { filter: 'featured' } })}
-            />
-            {featuredProviders.length === 0 ? (
-              renderEmptySection(emptyMessage)
-            ) : (
-              <AutoScrollCarousel
-                itemWidth={PROVIDER_CARD_STEP}
-                itemCount={featuredProviders.length}
-                contentContainerStyle={styles.horizontalList}
-              >
-                {featuredProviders.map((provider) => (
-                  <ProviderCard
-                    key={provider.id}
-                    provider={provider}
-                    onPress={() => router.push({ pathname: '/providers/[id]', params: { id: provider.id } })}
-                  />
-                ))}
-              </AutoScrollCarousel>
-            )}
-          </View>
+          {isLoading ? (
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator color={colors.primary} />
+            </View>
+          ) : (
+            <>
+              <View style={styles.section}>
+                <SectionHeader
+                  title="Featured Providers"
+                  onActionPress={() => router.push({ pathname: '/listings', params: { filter: 'featured' } })}
+                />
+                {featuredProviders.length === 0 ? (
+                  renderEmptySection(emptyMessage)
+                ) : (
+                  <AutoScrollCarousel itemWidth={PROVIDER_CARD_STEP} itemCount={featuredProviders.length} contentContainerStyle={styles.horizontalList}>
+                    {featuredProviders.map((provider) => (
+                      <ProviderCard
+                        key={provider.id}
+                        provider={provider}
+                        onPress={() => router.push({ pathname: '/providers/[id]', params: { id: provider.id } })}
+                      />
+                    ))}
+                  </AutoScrollCarousel>
+                )}
+              </View>
 
-          {/* ── Recently Added (manual scroll) ── */}
-          <View style={styles.section}>
-            <SectionHeader
-              title="Recently Added"
-              onActionPress={() => router.push({ pathname: '/listings', params: { filter: 'recent' } })}
-            />
-            {recentProviders.length === 0 ? (
-              renderEmptySection(emptyMessage)
-            ) : (
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={styles.horizontalList}
-              >
-                {recentProviders.map((provider) => (
-                  <ProviderCard
-                    key={provider.id}
-                    provider={provider}
-                    onPress={() => router.push({ pathname: '/providers/[id]', params: { id: provider.id } })}
-                  />
-                ))}
-              </ScrollView>
-            )}
-          </View>
+              <View style={styles.section}>
+                <SectionHeader
+                  title="Recently Added"
+                  onActionPress={() => router.push({ pathname: '/listings', params: { filter: 'recent' } })}
+                />
+                {recentProviders.length === 0 ? (
+                  renderEmptySection(emptyMessage)
+                ) : (
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.horizontalList}>
+                    {recentProviders.map((provider) => (
+                      <ProviderCard
+                        key={provider.id}
+                        provider={provider}
+                        onPress={() => router.push({ pathname: '/providers/[id]', params: { id: provider.id } })}
+                      />
+                    ))}
+                  </ScrollView>
+                )}
+              </View>
 
-          {/* ── Popular Providers (manual scroll) ── */}
-          <View style={styles.section}>
-            <SectionHeader
-              title="Popular Providers"
-              onActionPress={() => router.push({ pathname: '/listings', params: { filter: 'popular' } })}
-            />
-            {popularProviders.length === 0 ? (
-              renderEmptySection(emptyMessage)
-            ) : (
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={styles.horizontalList}
-              >
-                {popularProviders.map((provider) => (
-                  <ProviderCard
-                    key={provider.id}
-                    provider={provider}
-                    onPress={() => router.push({ pathname: '/providers/[id]', params: { id: provider.id } })}
-                  />
-                ))}
-              </ScrollView>
-            )}
-          </View>
+              <View style={styles.section}>
+                <SectionHeader
+                  title="Popular Providers"
+                  onActionPress={() => router.push({ pathname: '/listings', params: { filter: 'popular' } })}
+                />
+                {popularProviders.length === 0 ? (
+                  renderEmptySection(emptyMessage)
+                ) : (
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.horizontalList}>
+                    {popularProviders.map((provider) => (
+                      <ProviderCard
+                        key={provider.id}
+                        provider={provider}
+                        onPress={() => router.push({ pathname: '/providers/[id]', params: { id: provider.id } })}
+                      />
+                    ))}
+                  </ScrollView>
+                )}
+              </View>
+            </>
+          )}
         </ScrollView>
       </ThemedView>
     </SafeAreaView>
@@ -222,21 +231,11 @@ const styles = StyleSheet.create({
   safeArea: { flex: 1 },
   container: { flex: 1 },
   scrollContent: { paddingBottom: theme.spacing.xxxl },
-  searchRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: theme.spacing.sm,
-    paddingHorizontal: theme.spacing.lg,
-    marginBottom: theme.spacing.md,
-  },
+  searchRow: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing.sm, paddingHorizontal: theme.spacing.lg, marginBottom: theme.spacing.md },
   searchBar: { flex: 1 },
   section: { marginBottom: theme.spacing.lg },
   horizontalList: { paddingHorizontal: theme.spacing.lg, paddingBottom: theme.spacing.xs },
+  loadingContainer: { paddingVertical: theme.spacing.xxxl, alignItems: 'center' },
   emptySection: { paddingHorizontal: theme.spacing.lg },
-  emptySectionInner: {
-    padding: theme.spacing.lg,
-    borderRadius: theme.radius.lg,
-    borderWidth: 1,
-    alignItems: 'center',
-  },
+  emptySectionInner: { padding: theme.spacing.lg, borderRadius: theme.radius.lg, borderWidth: 1, alignItems: 'center' },
 });

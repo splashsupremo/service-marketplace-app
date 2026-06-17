@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useMemo } from 'react';
 import { ScrollView, View, Alert, StyleSheet } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { ThemedView } from '@/components/ui/ThemedView';
@@ -12,6 +12,7 @@ import { SectionHeader } from '@/components/ui/SectionHeader';
 import { MOCK_PROVIDERS } from '@/app/services/mockData/providers';
 import { MOCK_PROVIDER_DETAILS } from '@/services/mockData/providerDetails';
 import { useAuthStore } from '@/store/authStore';
+import { useFavouritesStore } from '@/store/favouritesStore';
 import { useThemeColors } from '@/hooks/useThemeColors';
 import { theme } from '@/constants/theme';
 
@@ -33,9 +34,10 @@ import { theme } from '@/constants/theme';
 export default function ProviderProfileScreen() {
   const colors = useThemeColors();
   const { id } = useLocalSearchParams<{ id: string }>();
-  const [isFavourited, setIsFavourited] = useState(false);
 
   const isAuthenticated = useAuthStore((s) => !!s.user);
+  const isFavourited = useFavouritesStore((s) => (id ? s.isFavourited(id) : false));
+  const toggleFavourite = useFavouritesStore((s) => s.toggleFavourite);
 
   const provider = useMemo(() => MOCK_PROVIDERS.find((p) => p.id === id), [id]);
   const detail = id ? MOCK_PROVIDER_DETAILS[id] : undefined;
@@ -52,7 +54,7 @@ export default function ProviderProfileScreen() {
     );
   }
 
-  function handleFavouritePress() {
+  async function handleFavouritePress() {
     if (!isAuthenticated) {
       Alert.alert(
         'Sign Up Required',
@@ -61,7 +63,13 @@ export default function ProviderProfileScreen() {
       );
       return;
     }
-    setIsFavourited((prev) => !prev);
+    if (!provider) {
+      return;
+    }
+    const { error } = await toggleFavourite(provider.id);
+    if (error) {
+      Alert.alert('Something went wrong', error);
+    }
   }
 
   function handleContactPress() {
@@ -73,8 +81,11 @@ export default function ProviderProfileScreen() {
       );
       return;
     }
+    if (!provider) {
+      return;
+    }
     // TODO: Phase 10 — navigate to chat screen with this provider
-    console.log('Navigate to chat with:', provider?.businessName ?? 'provider');
+    console.log('Navigate to chat with:', provider.businessName);
   }
 
   return (

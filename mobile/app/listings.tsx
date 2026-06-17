@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { View, FlatList, Pressable, StyleSheet, useWindowDimensions, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
@@ -9,7 +9,8 @@ import { ProviderGridCard } from '@/features/providers/components/ProviderGridCa
 import { FilterChip } from '@/features/listings/components/FilterChip';
 import { SortDropdown, SortOption } from '@/features/listings/components/SortDropdown';
 import { FilterModal, ListingsFilters } from '@/features/listings/components/FilterModal';
-import { MOCK_PROVIDERS } from '@/app/services/mockData/providers';
+import { supabase } from '@/services/supabase/client';
+import { mapDbProviderToProvider, DbProvider } from '@/services/supabase/providerMappers';
 import { useThemeColors } from '@/hooks/useThemeColors';
 import { theme } from '@/constants/theme';
 import { Provider } from '@/types/provider';
@@ -20,25 +21,16 @@ const GRID_GAP = theme.spacing.md;
 /**
  * ListingsScreen
  *
- * Full browsable provider listing with a 2-column grid, removable filter
- * chips, a sort dropdown, a full filter modal, and simulated infinite
- * scroll pagination over mock data.
- *
- * Reached via:
- *   /listings?category=Plumbing
- *   /listings?filter=featured | recent | popular
- *   /listings?state=Lagos
- * (params can combine)
- *
- * TODO: Phase 12 — replace MOCK_PROVIDERS + client-side pagination with
- * real Supabase queries using .range() for true server-side pagination.
+ * Phase 12: now queries the REAL providers table directly via Supabase,
+ * using .range() for true server-side pagination and exact count for
+ * the "X providers found" label — replacing Phase 5's simulated
+ * in-memory pagination over MOCK_PROVIDERS.
  */
 export default function ListingsScreen() {
   const colors = useThemeColors();
   const { width } = useWindowDimensions();
   const params = useLocalSearchParams<{ category?: string; filter?: string; state?: string }>();
 
-  // ── Initial filters derived from navigation params (read once on mount) ──
   const [filters, setFilters] = useState<ListingsFilters>({
     category: params.category ?? null,
     state: params.state ?? null,
@@ -46,56 +38,100 @@ export default function ListingsScreen() {
   });
   const [specialFilter, setSpecialFilter] = useState<string | null>(params.filter ?? null);
   const [sortOption, setSortOption] = useState<SortOption>(
-    params.filter === 'recent' ? 'newest' : params.filter === 'popular' ? 'rating' : 'rating'
+    params.filter === 'recent' ? 'newest' : 'rating'
   );
   const [filterModalVisible, setFilterModalVisible] = useState(false);
-  const [page, setPage] = useState(1);
 
-  // ── Grid sizing: 2 columns with consistent gaps, responsive to screen width ──
+  const [providers, setProviders] = useState<Provider[]>([]);
+  const [totalCount, setTotalCount] = useState(0);
+  const [page, setPage] = useState(0); // 0-indexed for .range() math
+  const [isLoading, setIsLoading] = useState(true);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+
   const horizontalPadding = theme.spacing.lg;
   const cardWidth = (width - horizontalPadding * 2 - GRID_GAP) / 2;
 
-  // ── Apply all filters ──
-  const filteredProviders = useMemo<Provider[]>(() => {
-    let result = MOCK_PROVIDERS.filter((p) => {
-      const categoryMatch = !filters.category || p.category === filters.category;
-      const stateMatch = !filters.state || p.state === filters.state;
-      const ratingMatch = !filters.minRating || p.rating >= filters.minRating;
-      const specialMatch = specialFilter !== 'featured' || p.isFeatured;
-      return categoryMatch && stateMatch && ratingMatch && specialMatch;
-    });
+  /**
+   * buildQuery
+   *
+   * Constructs the Supabase query with all active filters and sort
+   * applied, but WITHOUT .range() — the caller adds that, since the
+   * same filter/sort combination is reused for both the initial fetch
+   * and "load more" pagination.
+   */
+  function buildQuery() {
+    let query = supabase.from('providers').select('*', { count: 'exact' });
 
-    // ── Apply sort ──
+    if (filters.category) query = query.eq('category', filters.category);
+    if (filters.state) query = query.eq('state', filters.state);
+    if (filters.minRating) query = query.gte('rating', filters.minRating);
+    if (specialFilter === 'featured') query = query.eq('is_featured', true);
+
     if (sortOption === 'rating') {
-      result = [...result].sort((a, b) => b.rating - a.rating);
+      query = query.order('rating', { ascending: false });
     } else if (sortOption === 'newest') {
-      result = [...result].sort(
-        (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-      );
+      query = query.order('created_at', { ascending: false });
     } else if (sortOption === 'reviews') {
-      result = [...result].sort((a, b) => b.reviewCount - a.reviewCount);
+      query = query.order('review_count', { ascending: false });
     }
 
-    return result;
+    return query;
+  }
+
+  /**
+   * fetchFirstPage
+   *
+   * Re-fetches from scratch (page 0) whenever filters/sort change.
+   */
+  const fetchFirstPage = useCallback(async () => {
+    setIsLoading(true);
+    const { data, count, error } = await buildQuery().range(0, PAGE_SIZE - 1);
+
+    if (error) {
+      console.error('Error fetching providers:', error.message);
+      setIsLoading(false);
+      return;
+    }
+
+    setProviders((data ?? []).map((row) => mapDbProviderToProvider(row as DbProvider)));
+    setTotalCount(count ?? 0);
+    setPage(0);
+    setIsLoading(false);
   }, [filters, specialFilter, sortOption]);
 
-  // ── Simulated pagination: slice the filtered results to `page * PAGE_SIZE` items ──
-  const visibleProviders = useMemo(
-    () => filteredProviders.slice(0, page * PAGE_SIZE),
-    [filteredProviders, page]
-  );
-  const hasMore = visibleProviders.length < filteredProviders.length;
+  useEffect(() => {
+    fetchFirstPage();
+  }, [fetchFirstPage]);
 
-  const handleLoadMore = useCallback(() => {
-    if (hasMore) {
-      setPage((p) => p + 1);
+  /**
+   * handleLoadMore
+   *
+   * Fetches the next page and appends it, only if more rows remain.
+   */
+  async function handleLoadMore() {
+    const hasMore = providers.length < totalCount;
+    if (!hasMore || isLoadingMore) return;
+
+    setIsLoadingMore(true);
+    const nextPage = page + 1;
+    const from = nextPage * PAGE_SIZE;
+    const to = from + PAGE_SIZE - 1;
+
+    const { data, error } = await buildQuery().range(from, to);
+
+    if (error) {
+      console.error('Error fetching more providers:', error.message);
+      setIsLoadingMore(false);
+      return;
     }
-  }, [hasMore]);
 
-  // Reset pagination whenever filters/sort change, so the list starts fresh
+    setProviders((prev) => [...prev, ...(data ?? []).map((row) => mapDbProviderToProvider(row as DbProvider))]);
+    setPage(nextPage);
+    setIsLoadingMore(false);
+  }
+
   function updateFilters(next: ListingsFilters) {
     setFilters(next);
-    setPage(1);
   }
 
   function clearCategory() {
@@ -109,18 +145,14 @@ export default function ListingsScreen() {
   }
   function clearSpecialFilter() {
     setSpecialFilter(null);
-    setPage(1);
   }
 
   const hasActiveFilters = !!(filters.category || filters.state || filters.minRating || specialFilter);
+  const hasMore = providers.length < totalCount;
 
   const screenTitle =
     specialFilter === 'featured'
       ? 'Featured Providers'
-      : specialFilter === 'recent'
-      ? 'Recently Added'
-      : specialFilter === 'popular'
-      ? 'Popular Providers'
       : filters.category
       ? filters.category
       : 'All Providers';
@@ -129,7 +161,6 @@ export default function ListingsScreen() {
     <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.background }]} edges={['top']}>
       <ThemedView style={styles.container}>
 
-        {/* ── Header ── */}
         <View style={[styles.header, { borderBottomColor: colors.border }]}>
           <Pressable onPress={() => router.back()} hitSlop={8} accessibilityLabel="Go back">
             <Ionicons name="arrow-back" size={22} color={colors.text} />
@@ -137,81 +168,73 @@ export default function ListingsScreen() {
           <ThemedText variant="h3" numberOfLines={1} style={styles.headerTitle}>
             {screenTitle}
           </ThemedText>
-          <Pressable
-            onPress={() => setFilterModalVisible(true)}
-            hitSlop={8}
-            accessibilityLabel="Open filters"
-            style={styles.filterIconButton}
-          >
+          <Pressable onPress={() => setFilterModalVisible(true)} hitSlop={8} accessibilityLabel="Open filters" style={styles.filterIconButton}>
             <Ionicons name="options-outline" size={22} color={colors.text} />
           </Pressable>
         </View>
 
-        {/* ── Active Filter Chips ── */}
         {hasActiveFilters && (
           <View style={styles.chipsRow}>
-            {specialFilter && (
-              <FilterChip
-                label={specialFilter === 'featured' ? 'Featured' : specialFilter === 'recent' ? 'Recently Added' : 'Popular'}
-                onRemove={clearSpecialFilter}
-              />
-            )}
+            {specialFilter && <FilterChip label="Featured" onRemove={clearSpecialFilter} />}
             {filters.category && <FilterChip label={filters.category} onRemove={clearCategory} />}
             {filters.state && <FilterChip label={filters.state} onRemove={clearState} />}
             {filters.minRating && <FilterChip label={`${filters.minRating.toFixed(1)}+ ★`} onRemove={clearRating} />}
           </View>
         )}
 
-        {/* ── Result Count + Sort ── */}
         <View style={styles.resultRow}>
           <ThemedText variant="caption" color="textSecondary">
-            {filteredProviders.length} provider{filteredProviders.length !== 1 ? 's' : ''} found
+            {totalCount} provider{totalCount !== 1 ? 's' : ''} found
           </ThemedText>
           <SortDropdown value={sortOption} onChange={setSortOption} />
         </View>
 
-        {/* ── Grid ── */}
-        <FlatList
-          data={visibleProviders}
-          keyExtractor={(item) => item.id}
-          numColumns={2}
-          columnWrapperStyle={{ gap: GRID_GAP }}
-          contentContainerStyle={[styles.gridContent, { paddingHorizontal: horizontalPadding }]}
-          showsVerticalScrollIndicator={false}
-          onEndReachedThreshold={0.4}
-          onEndReached={handleLoadMore}
-          renderItem={({ item }) => (
-            <ProviderGridCard
-              provider={item}
-              width={cardWidth}
-              onPress={() => router.push({ pathname: '/providers/[id]', params: { id: item.id } })}
-              style={{ marginBottom: GRID_GAP }}
-            />
-          )}
-          ListEmptyComponent={
-            <View style={styles.emptyState}>
-              <Ionicons name="search-outline" size={40} color={colors.textMuted} />
-              <ThemedText color="textMuted" style={{ marginTop: theme.spacing.sm }}>
-                No providers match your filters
-              </ThemedText>
-            </View>
-          }
-          ListFooterComponent={
-            hasMore ? (
-              <View style={styles.footerLoading}>
-                <ActivityIndicator color={colors.primary} />
-              </View>
-            ) : visibleProviders.length > 0 ? (
-              <View style={styles.footerLoading}>
-                <ThemedText variant="caption" color="textMuted">
-                  You've reached the end
+        {isLoading ? (
+          <View style={styles.centerContainer}>
+            <ActivityIndicator color={colors.primary} />
+          </View>
+        ) : (
+          <FlatList
+            data={providers}
+            keyExtractor={(item) => item.id}
+            numColumns={2}
+            columnWrapperStyle={{ gap: GRID_GAP }}
+            contentContainerStyle={[styles.gridContent, { paddingHorizontal: horizontalPadding }]}
+            showsVerticalScrollIndicator={false}
+            onEndReachedThreshold={0.4}
+            onEndReached={handleLoadMore}
+            renderItem={({ item }) => (
+              <ProviderGridCard
+                provider={item}
+                width={cardWidth}
+                onPress={() => router.push({ pathname: '/providers/[id]', params: { id: item.id } })}
+                style={{ marginBottom: GRID_GAP }}
+              />
+            )}
+            ListEmptyComponent={
+              <View style={styles.emptyState}>
+                <Ionicons name="search-outline" size={40} color={colors.textMuted} />
+                <ThemedText color="textMuted" style={{ marginTop: theme.spacing.sm, textAlign: 'center' }}>
+                  No providers match your filters yet
                 </ThemedText>
               </View>
-            ) : null
-          }
-        />
+            }
+            ListFooterComponent={
+              isLoadingMore ? (
+                <View style={styles.footerLoading}>
+                  <ActivityIndicator color={colors.primary} />
+                </View>
+              ) : !hasMore && providers.length > 0 ? (
+                <View style={styles.footerLoading}>
+                  <ThemedText variant="caption" color="textMuted">
+                    You've reached the end
+                  </ThemedText>
+                </View>
+              ) : null
+            }
+          />
+        )}
 
-        {/* ── Filter Modal ── */}
         <FilterModal
           visible={filterModalVisible}
           onClose={() => setFilterModalVisible(false)}
@@ -250,7 +273,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: theme.spacing.lg,
     paddingVertical: theme.spacing.md,
   },
+  centerContainer: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   gridContent: { paddingBottom: theme.spacing.xxxl },
-  emptyState: { alignItems: 'center', justifyContent: 'center', paddingTop: theme.spacing.xxxl },
+  emptyState: { alignItems: 'center', justifyContent: 'center', paddingTop: theme.spacing.xxxl, paddingHorizontal: theme.spacing.xl },
   footerLoading: { paddingVertical: theme.spacing.lg, alignItems: 'center' },
 });

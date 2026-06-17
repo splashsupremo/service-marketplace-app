@@ -126,10 +126,10 @@ export default function ProviderDashboardScreen() {
 
           {/* ── Stats Row ── */}
           <View style={[styles.statsRow, { borderColor: colors.border }]}>
-            <StatBlock value="0.0" label="Rating" />
-            <StatBlock value="0" label="Reviews" />
-            <StatBlock value={String(myServices.length)} label="Services" />
-          </View>
+  <StatBlock value={myProvider.rating.toFixed(1)} label="Rating" />
+  <StatBlock value={String(myProvider.review_count)} label="Reviews" />
+  <StatBlock value={String(myServices.length)} label="Services" />
+</View>
 
           {/* ── Menu ── */}
           <View style={styles.menuSection}>

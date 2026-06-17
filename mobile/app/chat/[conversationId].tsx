@@ -11,6 +11,8 @@ import { useChatStore } from '@/store/chatStore';
 import { useAuthStore } from '@/store/authStore';
 import { useThemeColors } from '@/hooks/useThemeColors';
 import { theme } from '@/constants/theme';
+import { useState as useState2 } from 'react'; // already have useState imported; just add this line if needed, or reuse existing useState import
+import { ReviewFormModal } from '@/features/reviews/components/ReviewFormModal';
 
 /**
  * ChatScreen
@@ -26,7 +28,13 @@ import { theme } from '@/constants/theme';
  */
 export default function ChatScreen() {
   const colors = useThemeColors();
-  const { conversationId, name } = useLocalSearchParams<{ conversationId: string; name?: string }>();
+  const { conversationId, name, providerId, isCustomerView } = useLocalSearchParams<{
+  conversationId: string;
+  name?: string;
+  providerId?: string;
+  isCustomerView?: string;
+}>();
+  const [reviewModalVisible, setReviewModalVisible] = useState(false);
   const userId = useAuthStore((s) => s.user?.id);
 
   const messages = useChatStore((s) => s.messages);
@@ -68,13 +76,18 @@ export default function ChatScreen() {
       <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding">
         <ThemedView style={styles.container}>
           <View style={[styles.header, { borderBottomColor: colors.border }]}>
-            <Pressable onPress={() => router.back()} hitSlop={8} accessibilityLabel="Go back">
-              <Ionicons name="arrow-back" size={22} color={colors.text} />
-            </Pressable>
-            <ThemedText variant="h3" numberOfLines={1} style={{ marginLeft: theme.spacing.md, flex: 1 }}>
-              {name ?? 'Chat'}
-            </ThemedText>
-          </View>
+  <Pressable onPress={() => router.back()} hitSlop={8} accessibilityLabel="Go back">
+    <Ionicons name="arrow-back" size={22} color={colors.text} />
+  </Pressable>
+  <ThemedText variant="h3" numberOfLines={1} style={{ marginLeft: theme.spacing.md, flex: 1 }}>
+    {name ?? 'Chat'}
+  </ThemedText>
+  {isCustomerView === 'true' && providerId && (
+    <Pressable onPress={() => setReviewModalVisible(true)} hitSlop={8} accessibilityLabel="Leave a review">
+      <Ionicons name="star-outline" size={22} color={colors.primary} />
+    </Pressable>
+  )}
+</View>
 
           {isLoadingMessages && messages.length === 0 ? (
             <View style={styles.loadingContainer}>
@@ -99,6 +112,14 @@ export default function ChatScreen() {
           )}
 
           <ChatInput onSend={handleSend} isSending={isSending} />
+          {providerId && (
+  <ReviewFormModal
+    visible={reviewModalVisible}
+    onClose={() => setReviewModalVisible(false)}
+    providerId={providerId}
+    providerName={name ?? 'this provider'}
+  />
+)}
         </ThemedView>
       </KeyboardAvoidingView>
     </SafeAreaView>

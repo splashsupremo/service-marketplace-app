@@ -11,6 +11,8 @@ export interface OwnedProvider {
   description: string;
   image_url: string | null;
   is_verified: boolean;
+  rating: number;
+  review_count: number;
   created_at: string;
 }
 

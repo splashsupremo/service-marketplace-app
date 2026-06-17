@@ -95,11 +95,16 @@ export default function MessagesScreen() {
               <ConversationListItem
                 conversation={item}
                 onPress={() =>
-                  router.push({
-                    pathname: '/chat/[conversationId]',
-                    params: { conversationId: item.id, name: item.otherPersonName },
-                  })
-                }
+  router.push({
+    pathname: '/chat/[conversationId]',
+    params: {
+      conversationId: item.id,
+      name: item.otherPersonName,
+      providerId: item.provider_id,
+      isCustomerView: String(item.isCustomerView),
+    },
+  })
+}
               />
             )}
           />

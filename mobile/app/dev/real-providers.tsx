@@ -79,7 +79,10 @@ export default function RealProvidersScreen() {
       return;
     }
 
-    router.push({ pathname: '/chat/[conversationId]', params: { conversationId, name: provider.business_name } });
+    router.push({
+  pathname: '/chat/[conversationId]',
+  params: { conversationId, name: provider.business_name, providerId: provider.id, isCustomerView: 'true' },
+});
   }
 
   return (

@@ -28,6 +28,7 @@ export interface ProviderFormInput {
   state: string;
   city: string;
   description: string;
+  image_url?: string | null;
 }
 
 interface ProviderState {
@@ -170,53 +171,53 @@ export const useProviderStore = create<ProviderState>((set, get) => ({
   },
 
   /**
-   * uploadLogo
-   *
-   * Uploads a local image file (picked via expo-image-picker) to the
-   * provider-logos Storage bucket, under a path scoped to the user's
-   * own id (matching our Storage RLS policies), and returns the
-   * resulting public URL. Does NOT update the providers table itself —
-   * the calling screen is responsible for then calling updateProvider
-   * with the returned url in image_url.
-   */
-  uploadLogo: async (localUri: string) => {
-    const { data: sessionData } = await supabase.auth.getSession();
-    const userId = sessionData.session?.user.id;
+ /**
+ * uploadLogo
+ *
+ * Uploads a local image file (picked via expo-image-picker) to the
+ * provider-logos Storage bucket. Uses expo-file-system's new File class
+ * (SDK 54+) to read the file's bytes directly, avoiding fetch()-to-blob
+ * conversion which can fail on Android for content:// URIs.
+ */
+uploadLogo: async (localUri: string) => {
+  const { data: sessionData } = await supabase.auth.getSession();
+  const userId = sessionData.session?.user.id;
 
-    if (!userId) {
-      return { url: null, error: 'You must be logged in to upload a photo.' };
+  if (!userId) {
+    return { url: null, error: 'You must be logged in to upload a photo.' };
+  }
+
+  try {
+    const { File } = await import('expo-file-system');
+
+    const file = new File(localUri);
+    const bytes = await file.bytes();
+
+    const filePath = `${userId}/logo.jpg`;
+
+    const { error: uploadError } = await supabase.storage
+      .from('provider-logos')
+      .upload(filePath, bytes, {
+        contentType: 'image/jpeg',
+        upsert: true,
+      });
+
+    if (uploadError) {
+      return { url: null, error: uploadError.message };
     }
 
-    try {
-      const response = await fetch(localUri);
-      const blob = await response.blob();
+    const { data: publicUrlData } = supabase.storage
+      .from('provider-logos')
+      .getPublicUrl(filePath);
 
-      const filePath = `${userId}/logo.jpg`;
+    const cacheBustedUrl = `${publicUrlData.publicUrl}?t=${Date.now()}`;
 
-      const { error: uploadError } = await supabase.storage
-        .from('provider-logos')
-        .upload(filePath, blob, {
-          contentType: 'image/jpeg',
-          upsert: true, // overwrite if they already uploaded a logo before
-        });
-
-      if (uploadError) {
-        return { url: null, error: uploadError.message };
-      }
-
-      const { data: publicUrlData } = supabase.storage
-        .from('provider-logos')
-        .getPublicUrl(filePath);
-
-      // Add a cache-busting query param so the new image shows immediately
-      // instead of a stale cached version with the same URL as before.
-      const cacheBustedUrl = `${publicUrlData.publicUrl}?t=${Date.now()}`;
-
-      return { url: cacheBustedUrl, error: null };
-    } catch (err) {
-      return { url: null, error: 'Failed to upload image. Please try again.' };
-    }
-  },
+    return { url: cacheBustedUrl, error: null };
+  } catch (err) {
+    console.error('Upload error details:', err);
+    return { url: null, error: 'Failed to upload image. Please try again.' };
+  }
+},
 
   /**
    * addService

@@ -1,5 +1,12 @@
 import { useEffect, useState } from 'react';
-import { View, FlatList, Pressable, ActivityIndicator, StyleSheet, KeyboardAvoidingView } from 'react-native';
+import {
+  View,
+  FlatList,
+  Pressable,
+  ActivityIndicator,
+  StyleSheet,
+  KeyboardAvoidingView,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -7,50 +14,42 @@ import { ThemedView } from '@/components/ui/ThemedView';
 import { ThemedText } from '@/components/ui/ThemedText';
 import { MessageBubble } from '@/features/chat/components/MessageBubble';
 import { ChatInput } from '@/features/chat/components/ChatInput';
+import { ReviewFormModal } from '@/features/reviews/components/ReviewFormModal';
 import { useChatStore } from '@/store/chatStore';
 import { useAuthStore } from '@/store/authStore';
 import { useThemeColors } from '@/hooks/useThemeColors';
 import { theme } from '@/constants/theme';
-import { useState as useState2 } from 'react'; // already have useState imported; just add this line if needed, or reuse existing useState import
-import { ReviewFormModal } from '@/features/reviews/components/ReviewFormModal';
 
-/**
- * ChatScreen
- *
- * Loads message history for the given conversationId, subscribes to
- * Realtime for live updates, and renders the conversation as an
- * inverted FlatList (newest message at the bottom, scroll position 0).
- *
- * `name` comes from the navigation params as a quick way to show "who
- * you're chatting with" in the header without an extra fetch — this is
- * acceptable for the temporary dev-bridge flow (Phase 10); the real
- * Messages tab (next step) will pass this consistently too.
- */
 export default function ChatScreen() {
   const colors = useThemeColors();
-  const { conversationId, name, providerId, isCustomerView } = useLocalSearchParams<{
-  conversationId: string;
-  name?: string;
-  providerId?: string;
-  isCustomerView?: string;
-}>();
-  const [reviewModalVisible, setReviewModalVisible] = useState(false);
+  const { conversationId, name, providerId, isCustomerView } =
+    useLocalSearchParams<{
+      conversationId: string;
+      name?: string;
+      providerId?: string;
+      isCustomerView?: string;
+    }>();
+
   const userId = useAuthStore((s) => s.user?.id);
 
   const messages = useChatStore((s) => s.messages);
   const isLoadingMessages = useChatStore((s) => s.isLoadingMessages);
+  const activeConversation = useChatStore((s) => s.activeConversation);
   const fetchMessages = useChatStore((s) => s.fetchMessages);
   const sendMessage = useChatStore((s) => s.sendMessage);
   const subscribeToMessages = useChatStore((s) => s.subscribeToMessages);
   const unsubscribe = useChatStore((s) => s.unsubscribe);
+  const markAsRead = useChatStore((s) => s.markAsRead);
 
   const [isSending, setIsSending] = useState(false);
+  const [reviewModalVisible, setReviewModalVisible] = useState(false);
 
   useEffect(() => {
     if (!conversationId) return;
 
     fetchMessages(conversationId);
     subscribeToMessages(conversationId);
+    markAsRead(conversationId); // Mark as read when chat opens
 
     return () => {
       unsubscribe();
@@ -62,39 +61,45 @@ export default function ChatScreen() {
     setIsSending(true);
     const { error } = await sendMessage(conversationId, text);
     setIsSending(false);
-    if (error) {
-      console.error('Failed to send message:', error);
-    }
+    if (error) console.error('Failed to send message:', error);
   }
 
-  // Reverse for inverted FlatList: newest first, since inverted lists
-  // render their data array bottom-to-top.
   const invertedMessages = [...messages].reverse();
+  const otherLastReadAt = activeConversation?.otherLastReadAt ?? null;
 
   return (
-    <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.background }]} edges={['top']}>
+    <SafeAreaView
+      style={[styles.safeArea, { backgroundColor: colors.background }]}
+      edges={['top']}
+    >
       <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding">
         <ThemedView style={styles.container}>
+          {/* ── Header ── */}
           <View style={[styles.header, { borderBottomColor: colors.border }]}>
-  <Pressable onPress={() => router.back()} hitSlop={8} accessibilityLabel="Go back">
-    <Ionicons name="arrow-back" size={22} color={colors.text} />
-  </Pressable>
-  <ThemedText variant="h3" numberOfLines={1} style={{ marginLeft: theme.spacing.md, flex: 1 }}>
-    {name ?? 'Chat'}
-  </ThemedText>
-  {isCustomerView === 'true' && providerId && (
-    <Pressable onPress={() => setReviewModalVisible(true)} hitSlop={8} accessibilityLabel="Leave a review">
-      <Ionicons name="star-outline" size={22} color={colors.primary} />
-    </Pressable>
-  )}
-</View>
+            <Pressable onPress={() => router.back()} hitSlop={8} accessibilityLabel="Go back">
+              <Ionicons name="arrow-back" size={22} color={colors.text} />
+            </Pressable>
+            <ThemedText variant="h3" numberOfLines={1} style={{ marginLeft: theme.spacing.md, flex: 1 }}>
+              {name ?? 'Chat'}
+            </ThemedText>
+            {isCustomerView === 'true' && providerId && (
+              <Pressable
+                onPress={() => setReviewModalVisible(true)}
+                hitSlop={8}
+                accessibilityLabel="Leave a review"
+              >
+                <Ionicons name="star-outline" size={22} color={colors.primary} />
+              </Pressable>
+            )}
+          </View>
 
+          {/* ── Messages ── */}
           {isLoadingMessages && messages.length === 0 ? (
-            <View style={styles.loadingContainer}>
+            <View style={styles.centreContainer}>
               <ActivityIndicator color={colors.primary} />
             </View>
           ) : messages.length === 0 ? (
-            <View style={styles.emptyContainer}>
+            <View style={styles.centreContainer}>
               <ThemedText color="textSecondary" style={{ textAlign: 'center' }}>
                 No messages yet. Say hello!
               </ThemedText>
@@ -106,21 +111,26 @@ export default function ChatScreen() {
               inverted
               contentContainerStyle={styles.listContent}
               renderItem={({ item }) => (
-                <MessageBubble message={item} isOwnMessage={item.sender_id === userId} />
+                <MessageBubble
+                  message={item}
+                  isOwnMessage={item.sender_id === userId}
+                  otherLastReadAt={otherLastReadAt}
+                />
               )}
             />
           )}
 
           <ChatInput onSend={handleSend} isSending={isSending} />
-          {providerId && (
-  <ReviewFormModal
-    visible={reviewModalVisible}
-    onClose={() => setReviewModalVisible(false)}
-    providerId={providerId}
-    providerName={name ?? 'this provider'}
-  />
-)}
         </ThemedView>
+
+        {providerId && (
+          <ReviewFormModal
+            visible={reviewModalVisible}
+            onClose={() => setReviewModalVisible(false)}
+            providerId={providerId}
+            providerName={name ?? 'this provider'}
+          />
+        )}
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
@@ -136,7 +146,6 @@ const styles = StyleSheet.create({
     paddingVertical: theme.spacing.md,
     borderBottomWidth: 1,
   },
-  loadingContainer: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  emptyContainer: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: theme.spacing.xl },
+  centreContainer: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: theme.spacing.xl },
   listContent: { paddingTop: theme.spacing.lg, paddingBottom: theme.spacing.sm },
 });

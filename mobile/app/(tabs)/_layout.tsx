@@ -1,27 +1,59 @@
 import { Tabs } from 'expo-router';
+import { View, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useThemeColors } from '@/hooks/useThemeColors';
+import { useChatStore } from '@/store/chatStore';
+import { useAuthStore } from '@/store/authStore';
+import { ThemedText } from '@/components/ui/ThemedText';
 
-/**
- * Tab bar layout for the main app navigation.
- *
- * This wraps the 5 main screens (Home, Search, Favourites, Messages, Profile)
- * in a bottom tab bar. Each <Tabs.Screen> corresponds to a file in this
- * same (tabs) folder:
- *   index.tsx      -> Home    (route: "/")
- *   search.tsx     -> Search  (route: "/search")
- *   favourites.tsx -> Favourites (route: "/favourites")
- *   messages.tsx   -> Messages   (route: "/messages")
- *   profile.tsx    -> Profile    (route: "/profile")
- */
+function TabBarIcon({
+  name,
+  color,
+  size,
+  badgeCount,
+}: {
+  name: keyof typeof Ionicons.glyphMap;
+  color: string;
+  size: number;
+  badgeCount?: number;
+}) {
+  if (!badgeCount || badgeCount === 0) {
+    return <Ionicons name={name} size={size} color={color} />;
+  }
+  return (
+    <View style={{ width: size + 10, height: size + 10 }}>
+      <Ionicons name={name} size={size} color={color} />
+      <View style={[badgeStyles.badge, { backgroundColor: 'red' }]}>
+        <ThemedText style={{ color: '#fff', fontSize: 9, fontWeight: '700' }}>
+          {badgeCount > 99 ? '99+' : String(badgeCount)}
+        </ThemedText>
+      </View>
+    </View>
+  );
+}
+
+const badgeStyles = StyleSheet.create({
+  badge: {
+    position: 'absolute',
+    top: -2,
+    right: -4,
+    minWidth: 16,
+    height: 16,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 3,
+  },
+});
+
 export default function TabLayout() {
   const colors = useThemeColors();
+  const isAuthenticated = useAuthStore((s) => !!s.user);
+  const totalUnreadCount = useChatStore((s) => (isAuthenticated ? s.totalUnreadCount : 0));
 
   return (
     <Tabs
       screenOptions={{
-        // Hide the default header for all tab screens for now —
-        // individual screens will add their own headers as needed.
         headerShown: false,
         tabBarActiveTintColor: colors.primary,
         tabBarInactiveTintColor: colors.textMuted,
@@ -63,7 +95,12 @@ export default function TabLayout() {
         options={{
           title: 'Messages',
           tabBarIcon: ({ color, size }) => (
-            <Ionicons name="chatbubble-outline" size={size} color={color} />
+            <TabBarIcon
+              name="chatbubble-outline"
+              size={size}
+              color={color}
+              badgeCount={totalUnreadCount}
+            />
           ),
         }}
       />

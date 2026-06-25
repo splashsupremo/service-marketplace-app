@@ -14,30 +14,18 @@ function formatRelativeDate(isoDate: string): string {
   const date = new Date(isoDate);
   const now = new Date();
   const isToday = date.toDateString() === now.toDateString();
-  if (isToday) {
-    return date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
-  }
+  if (isToday) return date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
   const yesterday = new Date(now);
   yesterday.setDate(now.getDate() - 1);
-  if (date.toDateString() === yesterday.toDateString()) {
-    return 'Yesterday';
-  }
+  if (date.toDateString() === yesterday.toDateString()) return 'Yesterday';
   const diffDays = Math.floor((now.getTime() - date.getTime()) / (1000 * 60 * 60 * 24));
-  if (diffDays < 7) {
-    return date.toLocaleDateString([], { weekday: 'short' });
-  }
+  if (diffDays < 7) return date.toLocaleDateString([], { weekday: 'short' });
   return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
 }
 
-/**
- * ConversationListItem
- *
- * One row in the Messages tab. Shows the other participant's name
- * (provider business name if viewer is the customer, customer's full
- * name if viewer is the provider) and a relative last-activity time.
- */
 export function ConversationListItem({ conversation, onPress }: ConversationListItemProps) {
   const colors = useThemeColors();
+  const hasUnread = conversation.unreadCount > 0;
 
   return (
     <Pressable
@@ -47,9 +35,14 @@ export function ConversationListItem({ conversation, onPress }: ConversationList
         { borderBottomColor: colors.divider, opacity: pressed ? 0.7 : 1 },
       ]}
     >
+      {/* Avatar */}
       <View style={[styles.avatar, { backgroundColor: colors.surfaceAlt }]}>
         {conversation.otherPersonImage ? (
-          <Image source={{ uri: conversation.otherPersonImage }} style={styles.avatarImage} resizeMode="cover" />
+          <Image
+            source={{ uri: conversation.otherPersonImage }}
+            style={styles.avatarImage}
+            resizeMode="cover"
+          />
         ) : (
           <Ionicons
             name={conversation.isCustomerView ? 'storefront-outline' : 'person-outline'}
@@ -59,18 +52,33 @@ export function ConversationListItem({ conversation, onPress }: ConversationList
         )}
       </View>
 
+      {/* Name + preview */}
       <View style={{ flex: 1 }}>
-        <ThemedText variant="bodySemibold" numberOfLines={1}>
+        <ThemedText
+          variant={hasUnread ? 'bodySemibold' : 'body'}
+          numberOfLines={1}
+          style={{ color: hasUnread ? colors.text : colors.textSecondary }}
+        >
           {conversation.otherPersonName}
         </ThemedText>
-        <ThemedText variant="caption" color="textSecondary" numberOfLines={1}>
-          {conversation.isCustomerView ? 'Tap to view conversation' : 'Tap to view conversation'}
+        <ThemedText variant="caption" color="textMuted" numberOfLines={1}>
+          Tap to view conversation
         </ThemedText>
       </View>
 
-      <ThemedText variant="caption" color="textMuted">
-        {formatRelativeDate(conversation.last_message_at)}
-      </ThemedText>
+      {/* Right side: timestamp + unread badge */}
+      <View style={styles.rightCol}>
+        <ThemedText variant="caption" color="textMuted">
+          {formatRelativeDate(conversation.last_message_at)}
+        </ThemedText>
+        {hasUnread && (
+          <View style={[styles.badge, { backgroundColor: colors.primary }]}>
+            <ThemedText variant="caption" style={{ color: colors.textInverse, fontSize: 10 }}>
+              {conversation.unreadCount > 99 ? '99+' : String(conversation.unreadCount)}
+            </ThemedText>
+          </View>
+        )}
+      </View>
     </Pressable>
   );
 }
@@ -92,4 +100,13 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   avatarImage: { width: '100%', height: '100%' },
+  rightCol: { alignItems: 'flex-end', gap: 4 },
+  badge: {
+    minWidth: 20,
+    height: 20,
+    borderRadius: theme.radius.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 5,
+  },
 });

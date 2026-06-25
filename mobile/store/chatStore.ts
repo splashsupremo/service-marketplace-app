@@ -21,18 +21,24 @@ export interface ConversationSummary {
   otherPersonImage: string | null;
   /** True if the logged-in user is the customer in this conversation */
   isCustomerView: boolean;
+  unreadCount: number;
+  /** The other participant's last_read_at — used for read receipts in chat */
+  otherLastReadAt: string | null;
 }
 
 interface ChatState {
   conversations: ConversationSummary[];
   isLoadingConversations: boolean;
+  totalUnreadCount: number;
 
   messages: ChatMessage[];
   isLoadingMessages: boolean;
+  activeConversation: ConversationSummary | null;
   activeChannel: RealtimeChannel | null;
 
   fetchConversations: () => Promise<void>;
   startConversation: (providerId: string) => Promise<{ conversationId: string | null; error: string | null }>;
+  markAsRead: (conversationId: string) => Promise<void>;
 
   fetchMessages: (conversationId: string) => Promise<void>;
   sendMessage: (conversationId: string, content: string) => Promise<{ error: string | null }>;
@@ -46,9 +52,11 @@ interface ChatState {
 export const useChatStore = create<ChatState>((set, get) => ({
   conversations: [],
   isLoadingConversations: false,
+  totalUnreadCount: 0,
 
   messages: [],
   isLoadingMessages: false,
+  activeConversation: null,
   activeChannel: null,
 
   /**
@@ -69,13 +77,13 @@ fetchConversations: async () => {
   const { data: sessionData } = await supabase.auth.getSession();
   const userId = sessionData.session?.user.id;
   if (!userId) {
-    set({ conversations: [], isLoadingConversations: false });
+    set({ conversations: [], isLoadingConversations: false, totalUnreadCount: 0 });
     return;
   }
 
   const { data: conversationsData, error } = await supabase
     .from('conversations')
-    .select('id, customer_id, provider_id, last_message_at')
+    .select('id, customer_id, provider_id, last_message_at, customer_last_read_at, provider_last_read_at')
     .order('last_message_at', { ascending: false });
 
   if (error) {
@@ -85,7 +93,7 @@ fetchConversations: async () => {
   }
 
   if (!conversationsData || conversationsData.length === 0) {
-    set({ conversations: [], isLoadingConversations: false });
+    set({ conversations: [], isLoadingConversations: false, totalUnreadCount: 0 });
     return;
   }
 
@@ -100,6 +108,33 @@ fetchConversations: async () => {
 
   const providersById = new Map((providersData ?? []).map((p) => [p.id, p]));
   const profilesById = new Map((profilesData ?? []).map((p) => [p.id, p]));
+
+  // Fetch unread counts for each conversation
+  const unreadCounts = await Promise.all(
+    conversationsData.map(async (conv) => {
+      const isCustomerView = conv.customer_id === userId;
+      const myLastReadAt = isCustomerView ? conv.customer_last_read_at : conv.provider_last_read_at;
+
+      if (!myLastReadAt) {
+        const { count } = await supabase
+          .from('messages')
+          .select('id', { count: 'exact', head: true })
+          .eq('conversation_id', conv.id)
+          .neq('sender_id', userId);
+        return { id: conv.id, count: count ?? 0 };
+      }
+
+      const { count } = await supabase
+        .from('messages')
+        .select('id', { count: 'exact', head: true })
+        .eq('conversation_id', conv.id)
+        .neq('sender_id', userId)
+        .gt('created_at', myLastReadAt);
+      return { id: conv.id, count: count ?? 0 };
+    })
+  );
+
+  const unreadById = new Map(unreadCounts.map((u) => [u.id, u.count]));
 
   const summaries: ConversationSummary[] = conversationsData.map((row) => {
     const isCustomerView = row.customer_id === userId;
@@ -116,10 +151,13 @@ fetchConversations: async () => {
         ? provider?.business_name ?? 'Provider'
         : customerProfile?.full_name ?? 'Customer',
       otherPersonImage: isCustomerView ? provider?.image_url ?? null : null,
+      unreadCount: unreadById.get(row.id) ?? 0,
+      otherLastReadAt: isCustomerView ? row.provider_last_read_at : row.customer_last_read_at,
     };
   });
 
-  set({ conversations: summaries, isLoadingConversations: false });
+  const totalUnread = summaries.reduce((sum, conv) => sum + conv.unreadCount, 0);
+  set({ conversations: summaries, isLoadingConversations: false, totalUnreadCount: totalUnread });
 },
 
   /**
@@ -165,10 +203,40 @@ fetchConversations: async () => {
   },
 
   /**
+   * markAsRead
+   */
+  markAsRead: async (conversationId: string) => {
+    const { data: sessionData } = await supabase.auth.getSession();
+    const userId = sessionData.session?.user.id;
+    if (!userId) return;
+
+    const conv = get().conversations.find((c) => c.id === conversationId);
+    const isCustomerView = conv?.isCustomerView ?? true;
+    const column = isCustomerView ? 'customer_last_read_at' : 'provider_last_read_at';
+    const now = new Date().toISOString();
+
+    await supabase
+      .from('conversations')
+      .update({ [column]: now })
+      .eq('id', conversationId);
+
+    set((state) => {
+      const updated = state.conversations.map((c) =>
+        c.id === conversationId ? { ...c, unreadCount: 0 } : c
+      );
+      const totalUnread = updated.reduce((sum, item) => sum + item.unreadCount, 0);
+      return { conversations: updated, totalUnreadCount: totalUnread };
+    });
+  },
+
+  /**
    * fetchMessages
    */
   fetchMessages: async (conversationId: string) => {
     set({ isLoadingMessages: true });
+
+    const conv = get().conversations.find((c) => c.id === conversationId) ?? null;
+    set({ activeConversation: conv });
 
     const { data, error } = await supabase
       .from('messages')

@@ -10,7 +10,9 @@ export interface OwnedProvider {
   city: string;
   description: string;
   image_url: string | null;
+  phone_number: string | null;
   is_verified: boolean;
+  is_featured: boolean;
   rating: number;
   review_count: number;
   created_at: string;
@@ -31,6 +33,7 @@ export interface ProviderFormInput {
   city: string;
   description: string;
   image_url?: string | null;
+  phone_number?: string | null;
 }
 
 interface ProviderState {

@@ -15,14 +15,11 @@ export interface ConversationSummary {
   customer_id: string;
   provider_id: string;
   last_message_at: string;
-  /** Display name of "the other person" relative to the logged-in user */
   otherPersonName: string;
-  /** Image to show — provider's logo (if I'm the customer) or null (if I'm the provider, no customer photo available) */
   otherPersonImage: string | null;
-  /** True if the logged-in user is the customer in this conversation */
+  providerPhoneNumber: string | null;
   isCustomerView: boolean;
   unreadCount: number;
-  /** The other participant's last_read_at — used for read receipts in chat */
   otherLastReadAt: string | null;
 }
 
@@ -102,7 +99,7 @@ fetchConversations: async () => {
   const customerIds = [...new Set(conversationsData.map((c) => c.customer_id))];
 
   const [{ data: providersData }, { data: profilesData }] = await Promise.all([
-    supabase.from('providers').select('id, business_name, image_url, user_id').in('id', providerIds),
+    supabase.from('providers').select('id, business_name, image_url, user_id, phone_number').in('id', providerIds),
     supabase.from('profiles').select('id, full_name').in('id', customerIds),
   ]);
 
@@ -153,6 +150,7 @@ fetchConversations: async () => {
       otherPersonImage: isCustomerView ? provider?.image_url ?? null : null,
       unreadCount: unreadById.get(row.id) ?? 0,
       otherLastReadAt: isCustomerView ? row.provider_last_read_at : row.customer_last_read_at,
+      providerPhoneNumber: isCustomerView ? provider?.phone_number ?? null : null,
     };
   });
 

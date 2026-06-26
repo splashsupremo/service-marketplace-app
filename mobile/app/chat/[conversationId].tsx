@@ -19,17 +19,48 @@ import { useChatStore } from '@/store/chatStore';
 import { useAuthStore } from '@/store/authStore';
 import { useThemeColors } from '@/hooks/useThemeColors';
 import { theme } from '@/constants/theme';
+import { Linking, Alert } from 'react-native';
+import * as Clipboard from 'expo-clipboard';
 
 export default function ChatScreen() {
   const colors = useThemeColors();
-  const { conversationId, name, providerId, isCustomerView } =
-    useLocalSearchParams<{
-      conversationId: string;
-      name?: string;
-      providerId?: string;
-      isCustomerView?: string;
-    }>();
+  const { conversationId, name, providerId, isCustomerView, phoneNumber } =
+  useLocalSearchParams<{
+    conversationId: string;
+    name?: string;
+    providerId?: string;
+    isCustomerView?: string;
+    phoneNumber?: string;
+  }>();
+async function handleCallPress() {
+  if (!phoneNumber) {
+    Alert.alert('No phone number', 'This provider has not added a phone number yet.');
+    return;
+  }
 
+  // Copy to clipboard
+  await Clipboard.setStringAsync(phoneNumber);
+
+  // Open dialler
+  const telUrl = `tel:${phoneNumber.replace(/\s/g, '')}`;
+  const canOpen = await Linking.canOpenURL(telUrl);
+
+  if (canOpen) {
+    Alert.alert(
+      'Calling Provider',
+      `${phoneNumber} has been copied to your clipboard.\n\nOpening your dialler now.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Call', onPress: () => Linking.openURL(telUrl) },
+      ]
+    );
+  } else {
+    Alert.alert(
+      'Number Copied',
+      `${phoneNumber} has been copied to your clipboard.`
+    );
+  }
+}
   const userId = useAuthStore((s) => s.user?.id);
 
   const messages = useChatStore((s) => s.messages);
@@ -75,23 +106,39 @@ export default function ChatScreen() {
       <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding">
         <ThemedView style={styles.container}>
           {/* ── Header ── */}
-          <View style={[styles.header, { borderBottomColor: colors.border }]}>
-            <Pressable onPress={() => router.back()} hitSlop={8} accessibilityLabel="Go back">
-              <Ionicons name="arrow-back" size={22} color={colors.text} />
-            </Pressable>
-            <ThemedText variant="h3" numberOfLines={1} style={{ marginLeft: theme.spacing.md, flex: 1 }}>
-              {name ?? 'Chat'}
-            </ThemedText>
-            {isCustomerView === 'true' && providerId && (
-              <Pressable
-                onPress={() => setReviewModalVisible(true)}
-                hitSlop={8}
-                accessibilityLabel="Leave a review"
-              >
-                <Ionicons name="star-outline" size={22} color={colors.primary} />
-              </Pressable>
-            )}
-          </View>
+         <View style={[styles.header, { borderBottomColor: colors.border }]}>
+  <Pressable onPress={() => router.back()} hitSlop={8} accessibilityLabel="Go back">
+    <Ionicons name="arrow-back" size={22} color={colors.text} />
+  </Pressable>
+  <ThemedText variant="h3" numberOfLines={1} style={{ marginLeft: theme.spacing.md, flex: 1 }}>
+    {name ?? 'Chat'}
+  </ThemedText>
+
+  {isCustomerView === 'true' && (
+    <View style={styles.headerActions}>
+      {phoneNumber ? (
+        <Pressable
+          onPress={handleCallPress}
+          hitSlop={8}
+          accessibilityLabel="Call provider"
+          style={styles.headerIconButton}
+        >
+          <Ionicons name="call-outline" size={22} color={colors.success} />
+        </Pressable>
+      ) : null}
+      {providerId && (
+        <Pressable
+          onPress={() => setReviewModalVisible(true)}
+          hitSlop={8}
+          accessibilityLabel="Leave a review"
+          style={styles.headerIconButton}
+        >
+          <Ionicons name="star-outline" size={22} color={colors.primary} />
+        </Pressable>
+      )}
+    </View>
+  )}
+</View>
 
           {/* ── Messages ── */}
           {isLoadingMessages && messages.length === 0 ? (
@@ -146,6 +193,15 @@ const styles = StyleSheet.create({
     paddingVertical: theme.spacing.md,
     borderBottomWidth: 1,
   },
+
+  headerActions: {
+  flexDirection: 'row',
+  alignItems: 'center',
+  gap: theme.spacing.sm,
+},
+headerIconButton: {
+  padding: 2,
+},
   centreContainer: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: theme.spacing.xl },
   listContent: { paddingTop: theme.spacing.lg, paddingBottom: theme.spacing.sm },
 });

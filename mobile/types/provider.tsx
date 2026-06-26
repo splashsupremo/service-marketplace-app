@@ -37,6 +37,9 @@ export interface Provider {
   /** Whether this provider should appear in the "Featured" section */
   isFeatured: boolean;
 
+  /** Provider phone number, if available */
+  phoneNumber: string | null;
+
   /** ISO 8601 date string — used to sort "Recently Added" */
   createdAt: string;
 }

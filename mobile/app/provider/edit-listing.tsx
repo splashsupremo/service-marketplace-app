@@ -48,6 +48,7 @@ export default function EditListingScreen() {
   const isEditing = !!myProvider;
 
   const [businessName, setBusinessName] = useState(myProvider?.business_name ?? '');
+  const [phoneNumber, setPhoneNumber] = useState<string>(myProvider?.phone_number ?? '');
   const [category, setCategory] = useState<string | null>(myProvider?.category ?? null);
   const [state, setState] = useState<string | null>(myProvider?.state ?? null);
   const [city, setCity] = useState(myProvider?.city ?? '');
@@ -108,13 +109,14 @@ export default function EditListingScreen() {
   setIsSubmitting(true);
 
   const input = {
-    business_name: businessName.trim(),
-    category: category as string,
-    state: state as string,
-    city: city.trim(),
-    description: description.trim(),
-    image_url: imageUrl,
-  };
+  business_name: businessName.trim(),
+  category: category as string,
+  state: state as string,
+  city: city.trim(),
+  description: description.trim(),
+  image_url: imageUrl,
+  phone_number: phoneNumber.trim() || null,
+};
 
   const { error } = isEditing ? await updateProvider(input) : await createProvider(input);
 
@@ -237,7 +239,21 @@ export default function EditListingScreen() {
                   {fieldErrors.city}
                 </ThemedText>
               )}
-
+{/* Phone Number */}
+<ThemedText variant="label" color="textSecondary" style={styles.fieldLabel}>
+  Phone Number (optional)
+</ThemedText>
+<TextInput
+  value={phoneNumber}
+  onChangeText={setPhoneNumber}
+  placeholder="e.g. +234 801 234 5678"
+  placeholderTextColor={colors.textMuted}
+  keyboardType="phone-pad"
+  style={[styles.input, { backgroundColor: colors.surfaceAlt, borderColor: colors.border, color: colors.text }]}
+/>
+<ThemedText variant="caption" color="textMuted" style={{ marginTop: 4 }}>
+  Customers can use this to call you directly from the chat screen.
+</ThemedText>
               {/* Description */}
               <ThemedText variant="label" color="textSecondary" style={styles.fieldLabel}>
                 Description

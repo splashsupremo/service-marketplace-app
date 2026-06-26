@@ -15,6 +15,7 @@ export interface DbProvider {
   city: string;
   description: string;
   image_url: string | null;
+  phone_number: string | null;
   is_verified: boolean;
   is_featured: boolean;
   rating: number;
@@ -48,5 +49,6 @@ export function mapDbProviderToProvider(row: DbProvider): Provider {
     imageUrl: row.image_url ?? `https://picsum.photos/seed/${row.id}/400/300`,
     isFeatured: row.is_featured,
     createdAt: row.created_at,
+    phoneNumber: row.phone_number ?? null,
   };
 }

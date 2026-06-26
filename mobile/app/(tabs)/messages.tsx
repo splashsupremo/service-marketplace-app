@@ -102,6 +102,7 @@ export default function MessagesScreen() {
       name: item.otherPersonName,
       providerId: item.provider_id,
       isCustomerView: String(item.isCustomerView),
+      phoneNumber: item.providerPhoneNumber ?? '',
     },
   })
 }

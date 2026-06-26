@@ -164,15 +164,16 @@ export default function ProviderProfileScreen() {
       return;
     }
 
-    router.push({
-      pathname: '/chat/[conversationId]',
-      params: {
-        conversationId,
-        name: provider!.businessName,
-        providerId: provider!.id,
-        isCustomerView: 'true',
-      },
-    });
+   router.push({
+  pathname: '/chat/[conversationId]',
+  params: {
+    conversationId,
+    name: provider!.businessName,
+    providerId: provider!.id,
+    isCustomerView: 'true',
+    phoneNumber: provider!.phoneNumber ?? '',
+  },
+});
   }
 
   return (

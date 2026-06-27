@@ -1,5 +1,6 @@
 import { adminSupabase } from "@/lib/supabase/admin";
 import { AnalyticsData } from "@/lib/types";
+export const metadata = { title: "Overview · ServeNaija Admin" };
 import {
   Users,
   Store,

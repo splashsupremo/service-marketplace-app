@@ -1,5 +1,6 @@
 import { adminSupabase } from "@/lib/supabase/admin";
 import CategoryManager from "./CategoryManager";
+export const metadata = { title: "Categories · ServeNaija Admin" };
 
 async function getCategories() {
   const { data, error } = await adminSupabase

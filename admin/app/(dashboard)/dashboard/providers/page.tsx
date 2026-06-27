@@ -2,6 +2,7 @@ import { adminSupabase } from "@/lib/supabase/admin";
 import { AdminProvider } from "@/lib/types";
 import ProviderActions from "./ProviderActions";
 import { Star } from "lucide-react";
+export const metadata = { title: "Providers · ServeNaija Admin" };
 
 async function getProviders(): Promise<AdminProvider[]> {
   const { data, error } = await adminSupabase

@@ -19,22 +19,6 @@ import { theme } from '@/constants/theme';
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-/**
- * LoginScreen
- *
- * Simple email + password login, wired to useAuthStore().signIn().
- *
- * TODO: "Forgot Password?" is a stub for now (shows an alert) — a real
- * password reset flow (via supabase.auth.resetPasswordForEmail) is a
- * good candidate for a future phase, not part of our core Phase 7 scope.
- *
- * Responsive handling:
- * - SafeAreaView wraps the screen so content clears the status bar/notch
- *   and home indicator on every device.
- * - KeyboardAvoidingView uses "padding" behavior on both platforms.
- * - Form content is capped at maxWidth 480 and centered, so it doesn't
- *   stretch awkwardly on tablets/large screens.
- */
 export default function LoginScreen() {
   const colors = useThemeColors();
   const signIn = useAuthStore((s) => s.signIn);
@@ -79,17 +63,19 @@ export default function LoginScreen() {
     }
   }
 
-  function handleForgotPassword() {
-    setFormError(null);
-    alert('Password reset is coming soon. Please contact support for help.');
-  }
-
   return (
-    <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.background }]} edges={['top', 'bottom']}>
+    <SafeAreaView
+      style={[styles.safeArea, { backgroundColor: colors.background }]}
+      edges={['top', 'bottom']}
+    >
       <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding">
         <ThemedView style={styles.container}>
           <View style={styles.header}>
-            <Pressable onPress={() => router.back()} hitSlop={8} accessibilityLabel="Go back">
+            <Pressable
+              onPress={() => router.back()}
+              hitSlop={8}
+              accessibilityLabel="Go back"
+            >
               <Ionicons name="arrow-back" size={22} color={colors.text} />
             </Pressable>
           </View>
@@ -101,20 +87,38 @@ export default function LoginScreen() {
           >
             <View style={styles.formInner}>
               <ThemedText variant="h1">Welcome back</ThemedText>
-              <ThemedText color="textSecondary" style={{ marginTop: theme.spacing.xs, marginBottom: theme.spacing.lg }}>
+              <ThemedText
+                color="textSecondary"
+                style={{
+                  marginTop: theme.spacing.xs,
+                  marginBottom: theme.spacing.lg,
+                }}
+              >
                 Log in to contact providers, save favourites, and more
               </ThemedText>
 
               {formError && (
-                <View style={[styles.errorBanner, { backgroundColor: colors.errorLight }]}>
-                  <ThemedText variant="caption" style={{ color: colors.error }}>
+                <View
+                  style={[
+                    styles.errorBanner,
+                    { backgroundColor: colors.errorLight },
+                  ]}
+                >
+                  <ThemedText
+                    variant="caption"
+                    style={{ color: colors.error }}
+                  >
                     {formError}
                   </ThemedText>
                 </View>
               )}
 
               {/* Email */}
-              <ThemedText variant="label" color="textSecondary" style={styles.fieldLabel}>
+              <ThemedText
+                variant="label"
+                color="textSecondary"
+                style={styles.fieldLabel}
+              >
                 Email
               </ThemedText>
               <TextInput
@@ -122,19 +126,33 @@ export default function LoginScreen() {
                 onChangeText={setEmail}
                 placeholder="you@example.com"
                 placeholderTextColor={colors.textMuted}
-                style={[styles.input, { backgroundColor: colors.surfaceAlt, borderColor: colors.border, color: colors.text }]}
+                style={[
+                  styles.input,
+                  {
+                    backgroundColor: colors.surfaceAlt,
+                    borderColor: colors.border,
+                    color: colors.text,
+                  },
+                ]}
                 autoCapitalize="none"
                 autoCorrect={false}
                 keyboardType="email-address"
               />
               {fieldErrors.email && (
-                <ThemedText variant="caption" style={{ color: colors.error, marginTop: 4 }}>
+                <ThemedText
+                  variant="caption"
+                  style={{ color: colors.error, marginTop: 4 }}
+                >
                   {fieldErrors.email}
                 </ThemedText>
               )}
 
               {/* Password */}
-              <ThemedText variant="label" color="textSecondary" style={styles.fieldLabel}>
+              <ThemedText
+                variant="label"
+                color="textSecondary"
+                style={styles.fieldLabel}
+              >
                 Password
               </ThemedText>
               <View style={styles.passwordRow}>
@@ -144,21 +162,47 @@ export default function LoginScreen() {
                   placeholder="Your password"
                   placeholderTextColor={colors.textMuted}
                   secureTextEntry={!showPassword}
-                  style={[styles.input, styles.passwordInput, { backgroundColor: colors.surfaceAlt, borderColor: colors.border, color: colors.text }]}
+                  style={[
+                    styles.input,
+                    styles.passwordInput,
+                    {
+                      backgroundColor: colors.surfaceAlt,
+                      borderColor: colors.border,
+                      color: colors.text,
+                    },
+                  ]}
                   autoCapitalize="none"
                 />
-                <Pressable onPress={() => setShowPassword((v) => !v)} style={styles.eyeButton} hitSlop={8}>
-                  <Ionicons name={showPassword ? 'eye-off-outline' : 'eye-outline'} size={20} color={colors.textMuted} />
+                <Pressable
+                  onPress={() => setShowPassword((v) => !v)}
+                  style={styles.eyeButton}
+                  hitSlop={8}
+                >
+                  <Ionicons
+                    name={showPassword ? 'eye-off-outline' : 'eye-outline'}
+                    size={20}
+                    color={colors.textMuted}
+                  />
                 </Pressable>
               </View>
               {fieldErrors.password && (
-                <ThemedText variant="caption" style={{ color: colors.error, marginTop: 4 }}>
+                <ThemedText
+                  variant="caption"
+                  style={{ color: colors.error, marginTop: 4 }}
+                >
                   {fieldErrors.password}
                 </ThemedText>
               )}
 
-              <Pressable onPress={handleForgotPassword} style={{ marginTop: theme.spacing.sm, alignSelf: 'flex-end' }}>
-                <ThemedText variant="caption" style={{ color: colors.primary }}>
+              {/* Forgot Password — now navigates to the real screen */}
+              <Pressable
+                onPress={() => router.push('/auth/forgot-password' as any)}
+                style={{ marginTop: theme.spacing.sm, alignSelf: 'flex-end' }}
+              >
+                <ThemedText
+                  variant="caption"
+                  style={{ color: colors.primary }}
+                >
                   Forgot Password?
                 </ThemedText>
               </Pressable>
@@ -171,9 +215,18 @@ export default function LoginScreen() {
                 style={{ marginTop: theme.spacing.lg }}
               />
 
-              <Pressable onPress={() => router.replace('/auth/register')} style={styles.registerLink}>
+              <Pressable
+                onPress={() => router.replace('/auth/register')}
+                style={styles.registerLink}
+              >
                 <ThemedText variant="caption" color="textSecondary">
-                  Don't have an account? <ThemedText variant="captionSemibold" style={{ color: colors.primary }}>Sign up</ThemedText>
+                  Don't have an account?{' '}
+                  <ThemedText
+                    variant="captionSemibold"
+                    style={{ color: colors.primary }}
+                  >
+                    Sign up
+                  </ThemedText>
                 </ThemedText>
               </Pressable>
             </View>
@@ -187,7 +240,10 @@ export default function LoginScreen() {
 const styles = StyleSheet.create({
   safeArea: { flex: 1 },
   container: { flex: 1 },
-  header: { paddingHorizontal: theme.spacing.lg, paddingTop: theme.spacing.sm },
+  header: {
+    paddingHorizontal: theme.spacing.lg,
+    paddingTop: theme.spacing.sm,
+  },
   formContent: {
     paddingTop: theme.spacing.md,
     paddingBottom: theme.spacing.xxxl,
@@ -198,7 +254,10 @@ const styles = StyleSheet.create({
     maxWidth: 480,
     paddingHorizontal: theme.spacing.lg,
   },
-  fieldLabel: { marginTop: theme.spacing.lg, marginBottom: theme.spacing.xs },
+  fieldLabel: {
+    marginTop: theme.spacing.lg,
+    marginBottom: theme.spacing.xs,
+  },
   input: {
     borderWidth: 1,
     borderRadius: theme.radius.md,
@@ -208,7 +267,13 @@ const styles = StyleSheet.create({
   },
   passwordRow: { position: 'relative' },
   passwordInput: { paddingRight: 44 },
-  eyeButton: { position: 'absolute', right: theme.spacing.md, top: 0, bottom: 0, justifyContent: 'center' },
+  eyeButton: {
+    position: 'absolute',
+    right: theme.spacing.md,
+    top: 0,
+    bottom: 0,
+    justifyContent: 'center',
+  },
   errorBanner: {
     borderRadius: theme.radius.md,
     padding: theme.spacing.md,

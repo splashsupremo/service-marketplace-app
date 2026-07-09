@@ -8,6 +8,15 @@
     "scheme": "mobile",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
+    "androidStatusBar": {
+      "barStyle": "dark-content",
+      "backgroundColor": "#ffffff",
+      "translucent": false
+    },
+    "extra": {
+      "supabaseUrl": "https://hdezcdqrygamvlxroagj.supabase.co",
+      "supabaseAnonKey": "sb_publishable_b6kLlg88BSk_XgaGzzDCjw_Xmz1eYhi"
+    },
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.servenaija.app"
@@ -33,12 +42,12 @@
         "expo-splash-screen",
         {
           "image": "./assets/images/splash-icon.png",
-          "imageWidth": 200,
+          "imageWidth": 300,
           "resizeMode": "contain",
           "backgroundColor": "#0A84FF",
           "dark": {
             "image": "./assets/images/splash-icon.png",
-            "imageWidth": 200,
+            "imageWidth": 300,
             "resizeMode": "contain",
             "backgroundColor": "#0A0A0A"
           }
